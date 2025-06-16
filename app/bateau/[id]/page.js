@@ -1,5 +1,5 @@
 // app/bateau/[id]/page.js
-"use client"; // Ce composant est un Client Component
+"use client"; // Ce composant est un Client Component - br-net.fr
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
