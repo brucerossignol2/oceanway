@@ -1,0 +1,61 @@
+[
+  {
+    "id": "1",
+    "nom_bateau": "Navire exemple",
+    "prix_achat": 120000,
+    "description": "Navire exemple",
+    "imageUrl": "/images/663de628-5c14-4ce5-b063-fb307f0c3dd4.jpg",
+    "equipements": [
+      {
+        "label": "Guindeau",
+        "existe": true,
+        "etat": "a_reviser",
+        "quantite": 1,
+        "prix": 100,
+        "remarque": "sfdd"
+      },
+      {
+        "label": "Batterie moteur",
+        "existe": true,
+        "etat": "a_changer",
+        "quantite": 1,
+        "prix": 208,
+        "remarque": "sdf"
+      }
+    ],
+    "images": [
+      "/images/663de628-5c14-4ce5-b063-fb307f0c3dd4.jpg",
+      "/images/8e18193f-7415-417a-be61-128f2d96213b.jpg"
+    ]
+  },
+  {
+    "id": "2",
+    "nom_bateau": "test2",
+    "prix_achat": 120000,
+    "description": "fsf",
+    "imageUrl": "/images/default.jpg",
+    "equipements": [
+      {
+        "label": "Guindeau",
+        "existe": true,
+        "etat": "a_reviser",
+        "quantite": 2,
+        "prix": 100,
+        "remarque": "sfdd"
+      },
+      {
+        "label": "Batterie moteur",
+        "existe": true,
+        "etat": "a_changer",
+        "quantite": 1,
+        "prix": 208,
+        "remarque": "sdf"
+      }
+    ],
+    "images": [
+      "/images/default.jpg",
+      "/images/e515136c-6e52-4e7b-8ad4-3ee24a16af1f.jpg",
+      "/images/27be5e1d-9cae-4566-a21a-60ff7c3e1700.jpg"
+    ]
+  }
+]

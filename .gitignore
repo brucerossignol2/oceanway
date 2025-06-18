@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# variable avec la clé de la base Firebase - Firestore
+.env.local
