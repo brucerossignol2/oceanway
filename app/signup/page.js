@@ -5,8 +5,9 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore'; // Pour ajouter des données au profil
-import { auth, db } from '../../lib/firebase'; // Assurez-vous que le chemin est correct
+import { doc, setDoc } from 'firebase/firestore';
+import { auth, db } from '../../lib/firebase';
+import { setCookie } from 'nookies'; // Importe setCookie de nookies
 
 export default function SignupPage() {
   const [email, setEmail] = useState('');
@@ -36,7 +37,26 @@ export default function SignupPage() {
         createdAt: new Date().toISOString(),
       });
 
-      console.log('Inscription réussie et profil créé !');
+      const idToken = await userCredential.user.getIdToken(); // Récupère le token d'ID
+
+      // IMPORTANT : Définir le cookie de session qui sera lu par les Server Components
+      setCookie(null, 'firebaseIdToken', idToken, {
+        maxAge: 30 * 24 * 60 * 60, // Expire après 30 jours (ajustez selon votre politique de session)
+        path: '/', // Le cookie est disponible sur tout le chemin du site
+        secure: process.env.NODE_ENV === 'production', // 'true' en production (HTTPS), 'false' en développement (HTTP)
+        httpOnly: false, // Doit être 'false' pour être défini par le JavaScript client
+        sameSite: 'Lax', // Bonne pratique pour la sécurité et la compatibilité
+      });
+
+      console.log('Inscription réussie !');
+      console.log('Tentative de définition du cookie firebaseIdToken avec les propriétés suivantes:');
+      console.log('  Valeur (début):', idToken.substring(0, 20) + '...');
+      console.log('  maxAge:', 30 * 24 * 60 * 60);
+      console.log('  path:', '/');
+      console.log('  secure:', process.env.NODE_ENV === 'production');
+      console.log('  httpOnly:', false);
+      console.log('  sameSite:', 'Lax');
+
       router.push('/'); // Redirige vers la page d'accueil après inscription
     } catch (e) {
       console.error('Erreur d\'inscription:', e.message);

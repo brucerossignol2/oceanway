@@ -1,9 +1,12 @@
+// app/bateaux/page.jsx
+
 "use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import Image from "next/image";
+import { getAuth, onAuthStateChanged } from "firebase/auth"; // 🔄 Utilisation de onAuthStateChanged
 
 export default function BateauxPage() {
   const [bateaux, setBateaux] = useState([]);
@@ -12,15 +15,28 @@ export default function BateauxPage() {
   const router = useRouter();
 
   useEffect(() => {
-    async function fetchBateaux() {
+    const auth = getAuth();
+
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       try {
-        const res = await fetch("/api/bateaux");
+        let token = "";
+
+        if (user) {
+          token = await user.getIdToken(); // ✅ Récupération du token après que l'user est bien défini
+        }
+
+        const res = await fetch("/api/bateaux", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
         if (!res.ok) {
           throw new Error(`HTTP error! status: ${res.status}`);
         }
+
         const data = await res.json();
 
-        // Prendre la première image si elle existe sinon image par défaut
         const bateauxAvecImage = data.map((bateau) => ({
           ...bateau,
           imageUrl: bateau.images?.[0] || "/images/default.jpg",
@@ -33,8 +49,9 @@ export default function BateauxPage() {
       } finally {
         setLoading(false);
       }
-    }
-    fetchBateaux();
+    });
+
+    return () => unsubscribe(); // 🔁 Nettoyage du listener à la sortie
   }, []);
 
   if (loading)
@@ -50,17 +67,9 @@ export default function BateauxPage() {
   return (
     <div className="container mx-auto p-4 md:p-8">
       <h1 className="text-4xl font-extrabold mb-8 text-gray-900 text-center">
-        Liste des Bateaux
+        Liste des navires
       </h1>
-
-      <div className="flex justify-end mb-6">
-        <Link
-          href="/bateaux/nouveau"
-          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-200"
-        >
-          Ajouter un nouveau bateau
-        </Link>
-      </div>
+      <div className="flex justify-end mb-6"></div>
 
       {bateaux.length === 0 ? (
         <p className="text-center text-gray-600 text-lg">

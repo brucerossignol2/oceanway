@@ -39,6 +39,17 @@ const getDefaultEquipementsPure = () => [
   { label: 'Batterie moteur', existe: false, etat: 'bon', quantite: 1, prix: 0, depense: 0, remarque: '' },
 ];
 
+// Fonction pour obtenir un nouvel équipement par défaut
+const getNewDefaultEquipement = () => ({
+    label: '',
+    existe: true, // Par défaut, le nouvel équipement existe et est "bon"
+    etat: 'bon',
+    quantite: 1,
+    prix: 0,
+    depense: 0, // Sera recalculé
+    remarque: '',
+    isNew: true, // Indique que cette ligne est nouvelle et son label est éditable
+});
 
 export default function FicheBateau({ initialBateau, isNewBateau: propIsNewBateau }) {
   const router = useRouter();
@@ -57,13 +68,9 @@ export default function FicheBateau({ initialBateau, isNewBateau: propIsNewBatea
   const [creatorEmail, setCreatorEmail] = useState(null); // Nouvel état pour stocker l'email du créateur
 
   const [totalEquipementDepense, setTotalEquipementDepense] = useState(0);
-    // Changement ici : on utilise currentImageIndex au lieu de selectedMainImage pour le carrousel
-  //const [selectedMainImage, setSelectedMainImage] = useState('');
+  // Changement ici : on utilise currentImageIndex au lieu de selectedMainImage
   const [currentImageIndex, setCurrentImageIndex] = useState(0); 
   const fileInputRef = useRef(null);
-
-  
- 
 
   // Nouvel état pour le prix d'achat affiché (avec formatage)
   const [displayPrixAchat, setDisplayPrixAchat] = useState('');
@@ -72,45 +79,27 @@ export default function FicheBateau({ initialBateau, isNewBateau: propIsNewBatea
   const calculateDepense = useCallback(calculateDepensePure, []);
   const getDefaultEquipements = useCallback(getDefaultEquipementsPure, []);
 
-  //générer une nouvelle ligne d’équipement par défaut
-  const getNewEquipement = () => ({
-    label: '',
-    existe: true, // "coché" en valeur booléenne
-    etat: 'bon', // valeur par défaut
-    quantite: 1,
-    prix: 0,
-    depense: 0,
-    remarque: '',
-    isNew: true,
-  });
-
   // Synchronise l'état local du bateau avec la prop initialBateau si elle change
   // Et initialise les images et dépenses
   useEffect(() => {
     if (initialBateau) {
-          const safeEquipements = Array.isArray(initialBateau.equipements) ? initialBateau.equipements : [];
+      // Assurez-vous que initialBateau.equipements est un tableau, même s'il est vide ou null
+      const safeEquipements = Array.isArray(initialBateau.equipements) 
+                              ? initialBateau.equipements 
+                              : getDefaultEquipements();
 
-    // Si la liste est vide ou non définie, ajoutez une ligne par défaut
-    const equipementsInit = safeEquipements.length > 0 ? safeEquipements : [getNewEquipement()];
+      // Calculer la dépense pour chaque équipement lors de l'initialisation
+      const equipementsWithCalculatedDepense = safeEquipements.map(equip => ({
+        ...equip,
+        depense: calculateDepense(equip),
+        isNew: false, // Les équipements existants ne sont pas "nouveaux"
+      }));
 
-    // Calculer la dépense pour chaque équipement lors de l'initialisation
-    const equipementsWithCalculatedDepense = equipementsInit.map(equip => ({
-      ...equip,
-      depense: calculateDepense(equip),
-    }));
+      // Mettre à jour l'objet bateau avec les équipements calculés
+      setBateau({ ...initialBateau, equipements: equipementsWithCalculatedDepense });
 
-    setBateau(prev => ({
-      ...prev,
-      equipements: equipementsWithCalculatedDepense,
-    }));
-
-      // Initialise l'index de l'image à 0 quand le bateau change pour le carrousel
+      // Initialise l'index de l'image à 0 quand le bateau change
       setCurrentImageIndex(0);
-      //if (initialBateau.images && initialBateau.images.length > 0) {
-       // setSelectedMainImage(initialBateau.images[0]);
-      //} else {
-      //  setSelectedMainImage('/images/default.jpg');
-      //}
       
       // Calculer le total des dépenses avec les valeurs mises à jour
       const currentTotalDepense = equipementsWithCalculatedDepense.reduce((sum, equip) => sum + (equip.depense || 0), 0);
@@ -158,7 +147,13 @@ export default function FicheBateau({ initialBateau, isNewBateau: propIsNewBatea
       const updatedEquipements = prevBateau.equipements.map((equip, i) => {
         if (i === index) {
           const newEquip = { ...equip, [field]: value };
-          newEquip.depense = calculateDepense(newEquip); // Recalcule la dépense
+          // Si on décoche 'existe', l'état redevient 'bon' et la dépense 0
+          if (field === 'existe' && !value) {
+            newEquip.etat = 'bon';
+            newEquip.depense = 0; // Pas de dépense si l'équipement n'existe pas
+          } else {
+            newEquip.depense = calculateDepense(newEquip); // Recalcule la dépense
+          }
           return newEquip;
         }
         return equip;
@@ -171,35 +166,41 @@ export default function FicheBateau({ initialBateau, isNewBateau: propIsNewBatea
     });
   }, [calculateDepense]);
 
-  //fonction pour ajouter un équipement
-  const handleAddEquipement = () => {
-  setBateau(prev => {
-    if (!prev || !prev.equipements) return prev;
-    const newEquip = getNewEquipement();
-    return {
-      ...prev,
-      equipements: [...prev.equipements, newEquip],
-    };
-  });
-};
 
-//fonction pour supprimer une ligne (sauf la première)
-const handleRemoveEquipement = (index) => {
-  setBateau(prev => {
-    if (!prev || !prev.equipements) return prev;
-    // Ne pas supprimer la première ligne
-    if (index === 0) return prev;
-    const newEquipements = prev.equipements.filter((_, i) => i !== index);
-    // Recalculer la dépense totale
-    const totalDepense = newEquipements.reduce((sum, eq) => sum + (eq.depense || 0), 0);
-    setTotalEquipementDepense(totalDepense);
-    return {
-      ...prev,
-      equipements: newEquipements,
-    };
-  });
-};
+    // Gérer l'ajout d'un nouvel équipement
+    const handleAddEquipement = useCallback(() => {
+        setBateau(prevBateau => {
+            if (!prevBateau) return null;
+            const newEquipement = getNewDefaultEquipement();
+            // Calculer la dépense initiale pour le nouvel équipement
+            newEquipement.depense = calculateDepense(newEquipement); 
+            const updatedEquipements = [...prevBateau.equipements, newEquipement];
+            
+            const newTotalDepense = updatedEquipements.reduce((sum, equip) => sum + equip.depense, 0);
+            setTotalEquipementDepense(newTotalDepense);
 
+            return { ...prevBateau, equipements: updatedEquipements };
+        });
+    }, [calculateDepense]);
+
+    // Gérer la suppression d'un équipement
+    const handleRemoveEquipement = useCallback((indexToRemove) => {
+        // Optionnel: Ajouter une confirmation
+        if (bateau.equipements.length <= 1) {
+            setStatusMessage({ type: 'error', text: 'Vous ne pouvez pas supprimer la dernière ligne d\'équipement.' });
+            return;
+        }
+
+        setBateau(prevBateau => {
+            if (!prevBateau) return null;
+            const updatedEquipements = prevBateau.equipements.filter((_, i) => i !== indexToRemove);
+            
+            const newTotalDepense = updatedEquipements.reduce((sum, equip) => sum + equip.depense, 0);
+            setTotalEquipementDepense(newTotalDepense);
+
+            return { ...prevBateau, equipements: updatedEquipements };
+        });
+    }, [bateau?.equipements.length]); // Dépend de la longueur du tableau pour la condition
 
   // Gestionnaire de changement pour les champs de base (nom, prix, description)
   const handleGeneralChange = (e) => {
@@ -223,7 +224,6 @@ const handleRemoveEquipement = (index) => {
     if (!isNaN(numericValue) && rawValue !== '') {
       setDisplayPrixAchat(new Intl.NumberFormat('fr-FR').format(numericValue));
     } else {
-      // Si la saisie n'est pas numérique ou est vide, affiche la saisie brute
       setDisplayPrixAchat(rawValue);
     }
   };
@@ -253,17 +253,15 @@ const handleRemoveEquipement = (index) => {
         throw new Error(errorData.error || `Erreur lors du téléchargement: ${res.status}`);
       }
 
-        const { urls } = await res.json();
-        setBateau(prev => {
+      const { urls } = await res.json();
+      setBateau(prev => {
         const updatedImages = [...(prev.images || []), ...urls];
-        // Si c'était vide avant, on met l'index à 0 pour afficher la première nouvelle image du carrousel
-            //if (updatedImages.length > 0 && !selectedMainImage) {
-            //setSelectedMainImage(updatedImages[0]);
+        // Si c'était vide avant, on met l'index à 0 pour afficher la première nouvelle image
         if (prev.images?.length === 0 && updatedImages.length > 0) {
-          setCurrentImageIndex(0);
+            setCurrentImageIndex(0);
         }
         return { ...prev, images: updatedImages };
-       });
+      });
       setStatusMessage({ type: 'success', text: 'Images téléchargées avec succès !' });
 
     } catch (e) {
@@ -277,15 +275,13 @@ const handleRemoveEquipement = (index) => {
     }
   };
 
-
-
-    // Fonction pour supprimer une image de la galerie
+  // Fonction pour supprimer une image de la galerie
   const handleRemoveImage = (urlToRemove) => {
     setBateau(prev => {
       if (!prev) return null;
       const updatedImages = prev.images.filter(url => url !== urlToRemove);
 
-      // Ajuste l'index si l'image courante est supprimée pour le carrousel
+      // Ajuste l'index si l'image courante est supprimée
       if (currentImageIndex >= updatedImages.length && updatedImages.length > 0) {
         setCurrentImageIndex(updatedImages.length - 1);
       } else if (updatedImages.length === 0) {
@@ -295,7 +291,7 @@ const handleRemoveEquipement = (index) => {
     });
   };
 
-    // Fonctions pour naviguer dans le carrousel
+  // Fonctions pour naviguer dans le carrousel
   const handlePrevImage = useCallback(() => {
     if (!bateau || !bateau.images || bateau.images.length === 0) return;
     setCurrentImageIndex(prevIndex =>
@@ -358,16 +354,12 @@ const handleRemoveEquipement = (index) => {
       const bateauToSend = {
           ...bateau,
           prix_achat: parseFloat(bateau.prix_achat) || 0,
-
-          equipements: bateau.equipements.map(equip => {
-            const { isNew, depense, ...rest } = equip;
-            return {
-              ...rest,
+          equipements: bateau.equipements.map(equip => ({
+              ...equip,
               quantite: parseInt(equip.quantite) >= 0 ? parseInt(equip.quantite) : 0,
-              prix: parseInt(equip.prix) >= 0 ? parseInt(equip.prix) : 0
-            };
-          }),
-
+              prix: parseFloat(equip.prix) >= 0 ? parseFloat(equip.prix) : 0, // Utilise parseFloat pour le prix
+              depense: undefined // Ne pas envoyer la dépense calculée au serveur
+          })),
           images: bateau.images || [],
           // userId sera l'UID de l'utilisateur authentifié côté serveur pour les POST
           userId: isNewBateau ? user.uid : undefined, 
@@ -390,9 +382,19 @@ const handleRemoveEquipement = (index) => {
       const result = await res.json();
       if (isNewBateau) {
         setStatusMessage({ type: 'success', text: 'Bateau créé avec succès ! Redirection...' });
+        // Marquer tous les équipements comme non-nouveaux après un succès de création
+        setBateau(prev => ({
+          ...prev,
+          equipements: prev.equipements.map(e => ({ ...e, isNew: false })),
+        }));
         setTimeout(() => router.push(`/bateaux/${result.id}`), 2000); // Mise à jour du chemin de redirection
       } else {
         setStatusMessage({ type: 'success', text: 'Bateau enregistré avec succès !' });
+        // Marquer tous les équipements comme non-nouveaux après un succès de mise à jour
+        setBateau(prev => ({
+          ...prev,
+          equipements: prev.equipements.map(e => ({ ...e, isNew: false })),
+        }));
       }
     });
   };
@@ -406,6 +408,8 @@ const handleRemoveEquipement = (index) => {
         nom_bateau: `${bateau.nom_bateau} (Copie pour ${user.email})`,
         id: undefined, // L'ID sera généré par le serveur
         userId: user.uid, // L'utilisateur actuel est le propriétaire de la copie
+        // Les équipements dupliqués sont considérés comme non-nouveaux initialement
+        equipements: bateau.equipements.map(e => ({ ...e, isNew: false })),
       };
 
       const res = await fetch('/api/bateaux', {
@@ -441,7 +445,7 @@ const handleRemoveEquipement = (index) => {
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({ message: 'Erreur inconnue de l\'API' }));
-        throw new Error(errorData.message || `Erreur lors de la suppression: ${res.status}`);
+        throw new Error(errorData.message || `Erreur HTTP! statut: ${res.status}`);
       }
 
       setStatusMessage({ type: 'success', text: 'Bateau supprimé avec succès ! Redirection...' });
@@ -488,14 +492,14 @@ const handleRemoveEquipement = (index) => {
   // ET l'utilisateur est admin OU le propriétaire du bateau.
   const canDelete = user && !isExampleBoat && (user.role === 'admin' || bateau.userId === user.uid);
 
-    // Détermine l'image à afficher dans le carrousel
+  // Détermine l'image à afficher dans le carrousel
   const displayedImageUrl = (bateau.images && bateau.images.length > 0) 
                             ? bateau.images[currentImageIndex] 
                             : '/images/default.jpg';
   const hasMultipleImages = bateau.images && bateau.images.length > 1;
 
   return (
-    <div className="container mx-auto p-4 max-w-7xl bg-white shadow-lg rounded-lg my-8">
+    <div className="container mx-auto p-4 max-w-[1470px] bg-white shadow-lg rounded-lg my-8"> {/* Changed max-w-4xl to max-w-[1470px] */}
       <Link href="/bateaux" className="text-blue-600 hover:underline mb-4 inline-block">&larr; Retour à la liste</Link>
       {statusMessage && (
         <div className={`mb-4 p-3 rounded-md text-center font-medium ${statusMessage.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
@@ -504,7 +508,7 @@ const handleRemoveEquipement = (index) => {
       )}
       <h1 className="text-3xl font-bold mb-6 text-center text-gray-800">
         {isNewBateau ? 'Ajouter un Nouveau Bateau' : `Fiche de ${bateau.nom_bateau}`}
-      </h1>
+      </h1> 
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
@@ -539,7 +543,7 @@ const handleRemoveEquipement = (index) => {
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
                 required
               />
-            </div>
+              </div>
             <div className="flex-grow">
               <label htmlFor="description" className="block text-sm font-medium text-gray-700">Description</label>
               <textarea
@@ -654,168 +658,156 @@ const handleRemoveEquipement = (index) => {
                   Note : Les images seront stockées localement sur le serveur de développement. Pour la production, une solution de stockage cloud est recommandée.
               </p>
             </div>
-          </div>        </div>
+          </div>
+        </div>
 
 
 {/* Section Tableau des Équipements */}
 <div className="mt-8">
   <h2 className="text-2xl font-bold mb-4 text-gray-800">Équipements du Navire</h2>
 
-  {/* En-tête */}
-  <div className="grid grid-cols-13 gap-4 font-semibold mb-2">
-    <div className="col-span-2 text-center">Nom</div>
-    <div className="col-span-1 text-center relative flex justify-center items-center">
-      Existe
-      <div className="ml-2 relative group cursor-pointer text-blue-600">
-        <span className="font-bold text-lg select-none">?</span>
-        <div className="absolute bottom-full mb-2 w-48 bg-gray-800 text-white text-sm rounded-md p-2 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-300 z-10">
-          Cochez si présent dans le navire, alors pas de dépense supplémentaire.
-        </div>
-      </div>
+              
+<div className="grid grid-cols-[1.5fr_0.5fr_1.2fr_0.7fr_0.8fr_1fr_2fr_min-content] gap-x-2 text-xs font-medium text-gray-500 uppercase tracking-wider items-center py-2 border-b border-gray-200">
+  <div className="px-1 text-left">
+    Nom</div>
+<div className="px-1 text-center">
+  Existe
+  <div className="relative group inline-block ml-1 cursor-pointer text-blue-600">
+    <span className="font-bold text-lg select-none">?</span>
+    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-gray-800 text-white text-sm rounded-md p-2 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-300 z-10">
+      Cochez si présent dans le navire, alors pas de dépense supplémentaire.
     </div>
-    <div className="col-span-2 text-center relative flex justify-center items-center">
-      État
-      <div className="ml-2 relative group cursor-pointer text-blue-600">
-        <span className="font-bold text-lg select-none">?</span>
-        <div className="absolute bottom-full mb-2 w-48 bg-gray-800 text-white text-sm rounded-md p-2 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-300 z-10">
-          Si l'état est bon, pas de dépense. Si l'état est à réviser, 50% de la valeur sera mis en dépense.
-        </div>
-      </div>
-    </div>
-    <div className="col-span-1 text-center relative flex justify-center items-center">
-      Quantité
-      <div className="ml-2 relative group cursor-pointer text-blue-600">
-        <span className="font-bold text-lg select-none">?</span>
-        <div className="absolute bottom-full mb-2 w-48 bg-gray-800 text-white text-sm rounded-md p-2 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-300 z-10">
-          Si vous ne souhaitez pas mettre cet équipement dans votre navire, mettez la quantité à 0.
-        </div>
-      </div>
-    </div>
-    <div className="col-span-2 text-center relative flex justify-center items-center">
-      Prix
-      <div className="ml-2 relative group cursor-pointer text-blue-600">
-        <span className="font-bold text-lg select-none">?</span>
-        <div className="absolute bottom-full mb-2 w-48 bg-gray-800 text-white text-sm rounded-md p-2 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-300 z-10">
-          Valeur estimée de l'équipement fournit ou à ajouter.
-        </div>
-      </div>
-    </div>
-    <div className="col-span-1 text-center">Dépense</div>
-    <div className="col-span-3 text-center">Remarque</div>
-    <div className="col-span-1 text-center">supp.</div>
-  </div>
-
-  {/* Corps des données */}
-    <div className="overflow-x-auto">
-    {/* Chaque "ligne" est un flex ou grid, ici on utilise flex-col avec chaque ligne en flex-row */}
-    {bateau.equipements.map((equip, index) => (
-      <div key={index} className="grid grid-cols-13 gap-4 items-center border-b border-gray-200 py-2">
-        {/* Nom */}
-        <div className="col-span-2 px-3 text-sm font-medium text-gray-900">
-          {equip.isNew ? (
-            <input
-              type="text"
-              value={equip.label}
-              onChange={(e) => handleEquipementChange(index, 'label', e.target.value)}
-              className="w-full border border-gray-300 rounded-md shadow-sm p-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
-              placeholder="Nom de l'équipement"
-            />
-          ) : (
-            equip.label
-          )}
-        </div>
-
-        {/* Existe (Checkbox) */}
-        <div className="col-span-1 px-3 text-center">
-          <input
-            type="checkbox"
-            checked={equip.existe}
-            onChange={(e) => handleEquipementChange(index, 'existe', e.target.checked)}
-            className="h-4 w-4 text-blue-600 border-gray-300 rounded"
-          />
-        </div>
-
-        {/* État (Select) */}
-        <div className="col-span-2 px-3 text-center">
-          <select
-            value={equip.etat}
-            onChange={(e) => handleEquipementChange(index, 'etat', e.target.value)}
-            disabled={!equip.existe}
-            className={`mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-1 focus:ring-blue-500 focus:border-blue-500 text-sm ${!equip.existe ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
-          >
-            <option value="bon">Bon</option>
-            <option value="a_reviser">À réviser</option>
-            <option value="a_changer">À changer</option>
-          </select>
-        </div>
-
-        {/* Quantité */}
-        <div className="col-span-1 px-3 text-center">
-          <input
-            type="number"
-            min="0"
-            value={equip.quantite}
-            onChange={(e) => handleEquipementChange(index, 'quantite', parseInt(e.target.value) || 0)}
-            className="block w-14 border border-gray-300 rounded-md shadow-sm p-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
-          />
-        </div>
-
-        {/* Prix */}
-        <div className="col-span-2 px-3 text-center">
-          <input
-            type="number"
-            min="0"
-            step="10"
-            value={equip.prix}
-            onChange={(e) => handleEquipementChange(index, 'prix', parseInt(e.target.value) || 0)}
-            className="block w-20 border border-gray-300 rounded-md shadow-sm p-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
-          />
-        </div>
-
-        {/* Dépense */}
-        <div className="col-span-1 w-20 px-3 text-center font-bold text-gray-500">
-          {new Intl.NumberFormat('fr-FR').format(equip.depense)} €
-        </div>
-
-        {/* Remarque */}
-        <div className="col-span-3 px-3">
-          <input
-            type="text"
-            value={equip.remarque}
-            onChange={(e) => handleEquipementChange(index, 'remarque', e.target.value)}
-            className="block w-full border border-gray-300 rounded-md shadow-sm p-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
-          />
-        </div>
-            {index > 0 && (
-      <div className="col-span-1 px-3 flex justify-center">
-        <button
-          type="button"
-          onClick={() => handleRemoveEquipement(index)}
-          className="text-red-600 hover:underline text-sm"
-        >
-          X
-        </button>
-      </div>
-    )}
-      </div>
-    ))}
-    <div className="mt-4 flex justify-start">
-      <button
-        type="button"
-        onClick={handleAddEquipement}
-        className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition"
-      >
-        Ajouter un équipement
-      </button>
-    </div>
-  </div>
-
-  {/* Total */}
-  <div className="mt-4 text-right text-lg font-bold text-gray-800">
-    Total Dépenses Équipements : {new Intl.NumberFormat('fr-FR').format(totalEquipementDepense)} €
   </div>
 </div>
-
+  <div className="px-1 text-left">
+  État
+  <div className="relative group inline-block ml-1 cursor-pointer text-blue-600">
+    <span className="font-bold text-lg select-none">?</span>
+    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-gray-800 text-white text-sm rounded-md p-2 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-300 z-10">
+      Si l'état est bon, pas de dépense. Si l'état est à réviser, 50% de la valeur sera mis en dépense.
+    </div>
+    </div>
+</div>
+<div className="px-1 text-center">
+  Quantité
+  <div className="relative group inline-block ml-1 cursor-pointer text-blue-600">
+    <span className="font-bold text-lg select-none">?</span>
+    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-gray-800 text-white text-sm rounded-md p-2 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-300 z-10">
+      Si vous ne souhaitez pas mettre cet équipement dans votre navire, mettez la quantité à 0.
+    </div>
+  </div>
+</div>
+<div className="px-1 text-left">
+  Prix
+  <div className="relative group inline-block ml-1 cursor-pointer text-blue-600">
+    <span className="font-bold text-lg select-none">?</span>
+    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-gray-800 text-white text-sm rounded-md p-2 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-300 z-10">
+      Valeur estimée de l'équipement fournit ou à ajouter.
+    </div>
+  </div>
+</div>
+  <div className="px-1 text-left">Dépense</div>
+  <div className="px-1 text-left">Remarque</div>
+  <div className="px-1 text-center"></div> {/* Colonne vide pour le bouton de suppression */}
+</div>
+          <div className="overflow-x-auto">
+            {/* Le corps du "tableau" maintenant en divs */}
+            <div className="divide-y divide-gray-200">
+              {bateau.equipements.map((equip, index) => (
+                <div key={index} className="grid grid-cols-[1.5fr_0.5fr_1.2fr_0.7fr_0.8fr_1fr_2fr_min-content] gap-x-2 py-2 items-center">
+                  <div className="px-1 text-sm font-medium text-gray-900">
+                        {equip.isNew ? ( // Le champ 'label' est éditable si isNew est true
+                            <input
+                                type="text"
+                                value={equip.label || ''}
+                                onChange={(e) => handleEquipementChange(index, 'label', e.target.value)}
+                                className="block w-full border border-gray-300 rounded-md shadow-sm p-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                            />
+                        ) : ( // Sinon, il est en lecture seule
+                            <span className="block w-full p-1">{equip.label}</span>
+                        )}
+                    </div>
+                  <div className="px-1 text-sm text-gray-500 text-center">
+                      <input
+                        type="checkbox"
+                        checked={equip.existe}
+                        onChange={(e) => handleEquipementChange(index, 'existe', e.target.checked)}
+                        className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                      />
+                  </div>
+                  <div className="px-1 text-sm text-gray-500">
+                      <select
+                        value={equip.etat}
+                        onChange={(e) => handleEquipementChange(index, 'etat', e.target.value)}
+                        disabled={!equip.existe}
+                        className={`mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-1 focus:ring-blue-500 focus:border-blue-500 text-sm ${!equip.existe ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
+                      >
+                        <option value="bon">Bon</option>
+                        <option value="a_reviser">À réviser</option>
+                        <option value="a_changer">À changer</option>
+                      </select>
+                  </div>
+                  <div className="px-1 text-sm text-gray-500">
+                      <input
+                        type="number"
+                        min="0"
+                        value={equip.quantite}
+                        onChange={(e) => handleEquipementChange(index, 'quantite', parseInt(e.target.value) || 0)}
+                        className="block w-full border border-gray-300 rounded-md shadow-sm p-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                      />
+                  </div>
+                  <div className="px-1 text-sm text-gray-500">
+                      <input
+                        type="number"
+                        min="0"
+                        step="10" 
+                        value={equip.prix}
+                        onChange={(e) => handleEquipementChange(index, 'prix', parseFloat(e.target.value) || 0)} // Utilise parseFloat
+                        className="block w-full border border-gray-300 rounded-md shadow-sm p-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                      />
+                  </div>
+                  <div className="px-1 text-sm text-gray-500 font-bold">
+                      {new Intl.NumberFormat('fr-FR').format(equip.depense)} €
+                  </div>
+                  <div className="px-1 text-sm text-gray-500">
+                      <input
+                        type="text"
+                        value={equip.remarque || ''}
+                        onChange={(e) => handleEquipementChange(index, 'remarque', e.target.value)}
+                        className="block w-full border border-gray-300 rounded-md shadow-sm p-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                      />
+                  </div>
+                    <div className="px-1 text-sm text-gray-500 text-center">
+                        {bateau.equipements.length > 1 && ( // Permet de supprimer si plus d'une ligne
+                            <button
+                                type="button"
+                                onClick={() => handleRemoveEquipement(index)}
+                                className="text-red-500 hover:text-red-700 font-bold"
+                                title="Supprimer cet équipement"
+                            >
+                                &times;
+                            </button>
+                        )}
+                    </div>
+                </div>
+              ))}
+            </div>
+            {/* Bouton pour ajouter un équipement */}
+            <div className="mt-4 flex justify-end">
+                <button
+                    type="button"
+                    onClick={handleAddEquipement}
+                    className="px-4 py-2 bg-blue-500 text-white font-semibold rounded-md shadow-md hover:bg-blue-600 transition-colors duration-200 inline-flex items-center"
+                >
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                    Ajouter un équipement
+                </button>
+            </div>
+          </div>
+          <div className="mt-4 text-right text-lg font-bold text-gray-800">
+            Total Dépenses Équipements : {new Intl.NumberFormat('fr-FR').format(totalEquipementDepense)} €
+          </div>
+        </div>
 
         {/* Total général (bateau + dépenses équipements) */}
         <div className="text-3xl font-extrabold text-gray-900 text-center md:text-left mt-8 pt-4 border-t border-gray-200">
@@ -823,7 +815,7 @@ const handleRemoveEquipement = (index) => {
         </div>
 
         {/* Boutons d'action */}
-        <div className="flex flex-wrap justify-end space-x-4 mt-8">
+        <div className="flex flex-wrap justify-center md:justify-end space-x-4 mt-8"> {/* Added justify-center for smaller screens */}
           {canSaveOrModify && ( // Le bouton "Enregistrer les modifications" est affiché conditionnellement
             <button
               type="submit"

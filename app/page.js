@@ -15,10 +15,11 @@ export default function HomePage() {
       {/* 2. Votre contenu habituel */}
       <section className="container mx-auto p-7">
         <h1 className="text-4xl font-bold mb-4">
-          OceanWay est un outil permettant d'enregistrer des voiliers de navigation hauturière, et de faire une prévision sur le budget à prévoir pour que le navire soit prêt pour une traversée au long cours.
+          OceanWay, votre passeport pour le grand large.
         </h1>
         <p className="text-lg text-gray-700 mb-8">
-          Visualisez facilement votre projet d'achat et anticipez vos dépenses d’équipements.
+          Enregistrez votre voilier de navigation hauturière sur lequel vous avez une intention d'achat, visualisez votre projet global de dépense et anticipez sereinement le budget nécessaire pour une traversée au long cours.
+          Ceci est un outil gratuit d'aide à la décision pour l'achat d'un voilier avec une prévision transocéanique.
         </p>
 
         {/* Bouton vers la liste des navires */}

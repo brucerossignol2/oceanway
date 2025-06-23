@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Ma Flotte",
-  description: "Votre flotte de voiliers",
+  title: "OceanWay",
+  description: "Calcul de votre budget voilier pour la haute mer",
 };
 
 export default function RootLayout({
@@ -31,7 +31,16 @@ export default function RootLayout({
       >
         <AuthContextProvider>
           <Navbar />
-          <main>{children}</main>
+          <main className="min-h-screen bg-gray-100 py-6">
+            {children}
+          </main>
+          {/* Nouveau pied de page ajouté ici */}
+          <footer className="bg-gray-800 text-white p-4 text-center text-sm">
+            Créé par{' '}
+            <a href="https://br-net.fr" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
+              br-net.fr
+            </a>
+          </footer>
         </AuthContextProvider>
       </body>
     </html>

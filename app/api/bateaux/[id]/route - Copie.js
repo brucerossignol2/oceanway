@@ -1,6 +1,6 @@
 // app/api/bateaux/[id]/route.js
 import { NextResponse } from 'next/server';
-import { adminDb } from '../../../../lib/firebaseAdmin'; // Instance Firestore Admin
+import { adminDb } from '../../../../lib/firebaseAdmin'; // Firestore Admin instance
 import { authenticateServerSide } from '../../../../lib/authMiddleware'; // Notre utilitaire d'authentification
 import * as admin from 'firebase-admin'; // Pour FieldValue.serverTimestamp
 
@@ -10,7 +10,7 @@ async function getBateauWithPermissions(bateauId, user) {
   const docSnap = await docRef.get();
 
   if (!docSnap.exists) {
-    return { bateau: null, message: 'Bateau non trouvé', status: 404 };
+    return { bateau: null, message: 'Bateau non trouvé1', status: 404 };
   }
 
   const bateau = { id: docSnap.id, ...docSnap.data() };
@@ -18,7 +18,7 @@ async function getBateauWithPermissions(bateauId, user) {
   // Règles de lecture
   const isOwner = user && bateau.userId === user.uid;
   const isAdmin = user && user.role === 'admin';
-  const isPublic = bateau.userId === 'public-boat-owner'; // Assurez-vous que cet ID correspond à celui utilisé lors de la migration
+  const isPublic = bateau.userId === 'public-boat-owner';
 
   if (isPublic || isOwner || isAdmin) {
     return { bateau: bateau, message: null, status: 200 };
@@ -29,9 +29,9 @@ async function getBateauWithPermissions(bateauId, user) {
 
 // GET /api/bateaux/[id] - Récupère un bateau spécifique
 export async function GET(request, { params }) {
-  const { id } = await params; // Correction: 'params' est déjà un objet, pas besoin de 'await'
+  const { id } = await params; 
   const user = await authenticateServerSide(request);
-   //const user = await authenticateServerSide(request) || { uid: 'debugUser', role: 'admin' };
+  //const user = await authenticateServerSide(request) || { uid: 'debugUser', role: 'admin' };
 
   const { bateau, message, status } = await getBateauWithPermissions(id, user);
 
@@ -43,12 +43,10 @@ export async function GET(request, { params }) {
 
 // PUT /api/bateaux/[id] - Met à jour un bateau spécifique
 export async function PUT(request, { params }) {
-  const { id } = await params; // Correction: 'params' est déjà un objet, pas besoin de 'await'
+  const { id } = await params;  // <-- await obligatoire
 
   const user = await authenticateServerSide(request);
-  if (!user) {
-    return NextResponse.json({ message: 'Non authentifié' }, { status: 401 });
-  }
+  if (!user) return new Response('Unauthorized', { status: 401 });
 
   // Interdire la modification du bateau d'exemple (ID '1') sauf si l'utilisateur est admin
   if (id === '1' && user.role !== 'admin') {
@@ -61,14 +59,12 @@ export async function PUT(request, { params }) {
     const docSnap = await docRef.get();
 
     if (!docSnap.exists) {
-      return NextResponse.json({ message: 'Bateau non trouvé' }, { status: 404 });
+      return NextResponse.json({ message: 'Bateau non trouvé2' }, { status: 404 });
     }
 
     const currentBateau = docSnap.data();
 
     // Vérifier les permissions de modification (propriétaire ou admin)
-    // IMPORTANT: Utilisez les règles Firestore pour la sécurité principale,
-    // cette vérification est une couche supplémentaire.
     if (currentBateau.userId !== user.uid && user.role !== 'admin') {
       return NextResponse.json({ message: 'Accès non autorisé' }, { status: 403 });
     }
@@ -78,9 +74,9 @@ export async function PUT(request, { params }) {
       updatedAt: admin.firestore.FieldValue.serverTimestamp(), // Mettre à jour l'horodatage
       // S'assurer que userId ne peut pas être modifié via PUT par l'utilisateur
       userId: currentBateau.userId,
-      // Assurer que 'images' est un tableau
+      // S'assurer que 'images' est un tableau
       images: Array.isArray(data.images) ? data.images : (currentBateau.images || []),
-      // Assurer que 'equipements' est un tableau
+      // S'assurer que 'equipements' est un tableau
       equipements: Array.isArray(data.equipements) ? data.equipements : (currentBateau.equipements || []),
     };
 
@@ -96,7 +92,7 @@ export async function PUT(request, { params }) {
 
 // DELETE /api/bateaux/[id] - Supprime un bateau spécifique
 export async function DELETE(request, { params }) {
-  const { id } = await params; // Correction: 'params' est déjà un objet, pas besoin de 'await'
+  const { id } = await params;
   const user = await authenticateServerSide(request);
 
   if (!user) {
@@ -113,14 +109,12 @@ export async function DELETE(request, { params }) {
     const docSnap = await docRef.get();
 
     if (!docSnap.exists) {
-      return NextResponse.json({ message: 'Bateau non trouvé' }, { status: 404 });
+      return NextResponse.json({ message: 'Bateau non trouvé3' }, { status: 404 });
     }
 
     const bateauToDelete = docSnap.data();
 
     // Vérifier les permissions de suppression (propriétaire ou admin)
-    // IMPORTANT: Utilisez les règles Firestore pour la sécurité principale,
-    // cette vérification est une couche supplémentaire.
     if (bateauToDelete.userId !== user.uid && user.role !== 'admin') {
       return NextResponse.json({ message: 'Accès non autorisé' }, { status: 403 });
     }

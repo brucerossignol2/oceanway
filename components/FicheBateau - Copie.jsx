@@ -57,13 +57,8 @@ export default function FicheBateau({ initialBateau, isNewBateau: propIsNewBatea
   const [creatorEmail, setCreatorEmail] = useState(null); // Nouvel état pour stocker l'email du créateur
 
   const [totalEquipementDepense, setTotalEquipementDepense] = useState(0);
-    // Changement ici : on utilise currentImageIndex au lieu de selectedMainImage pour le carrousel
-  //const [selectedMainImage, setSelectedMainImage] = useState('');
-  const [currentImageIndex, setCurrentImageIndex] = useState(0); 
+  const [selectedMainImage, setSelectedMainImage] = useState('');
   const fileInputRef = useRef(null);
-
-  
- 
 
   // Nouvel état pour le prix d'achat affiché (avec formatage)
   const [displayPrixAchat, setDisplayPrixAchat] = useState('');
@@ -104,13 +99,11 @@ export default function FicheBateau({ initialBateau, isNewBateau: propIsNewBatea
       equipements: equipementsWithCalculatedDepense,
     }));
 
-      // Initialise l'index de l'image à 0 quand le bateau change pour le carrousel
-      setCurrentImageIndex(0);
-      //if (initialBateau.images && initialBateau.images.length > 0) {
-       // setSelectedMainImage(initialBateau.images[0]);
-      //} else {
-      //  setSelectedMainImage('/images/default.jpg');
-      //}
+      if (initialBateau.images && initialBateau.images.length > 0) {
+        setSelectedMainImage(initialBateau.images[0]);
+      } else {
+        setSelectedMainImage('/images/default.jpg');
+      }
       
       // Calculer le total des dépenses avec les valeurs mises à jour
       const currentTotalDepense = equipementsWithCalculatedDepense.reduce((sum, equip) => sum + (equip.depense || 0), 0);
@@ -253,17 +246,14 @@ const handleRemoveEquipement = (index) => {
         throw new Error(errorData.error || `Erreur lors du téléchargement: ${res.status}`);
       }
 
-        const { urls } = await res.json();
-        setBateau(prev => {
+      const { urls } = await res.json();
+      setBateau(prev => {
         const updatedImages = [...(prev.images || []), ...urls];
-        // Si c'était vide avant, on met l'index à 0 pour afficher la première nouvelle image du carrousel
-            //if (updatedImages.length > 0 && !selectedMainImage) {
-            //setSelectedMainImage(updatedImages[0]);
-        if (prev.images?.length === 0 && updatedImages.length > 0) {
-          setCurrentImageIndex(0);
+        if (updatedImages.length > 0 && !selectedMainImage) {
+            setSelectedMainImage(updatedImages[0]);
         }
         return { ...prev, images: updatedImages };
-       });
+      });
       setStatusMessage({ type: 'success', text: 'Images téléchargées avec succès !' });
 
     } catch (e) {
@@ -277,38 +267,18 @@ const handleRemoveEquipement = (index) => {
     }
   };
 
-
-
-    // Fonction pour supprimer une image de la galerie
+  // Fonction pour supprimer une image de la galerie
   const handleRemoveImage = (urlToRemove) => {
     setBateau(prev => {
       if (!prev) return null;
       const updatedImages = prev.images.filter(url => url !== urlToRemove);
 
-      // Ajuste l'index si l'image courante est supprimée pour le carrousel
-      if (currentImageIndex >= updatedImages.length && updatedImages.length > 0) {
-        setCurrentImageIndex(updatedImages.length - 1);
-      } else if (updatedImages.length === 0) {
-        setCurrentImageIndex(0); // Ou une valeur qui indique "pas d'image"
+      if (selectedMainImage === urlToRemove) {
+        setSelectedMainImage(updatedImages.length > 0 ? updatedImages[0] : '/images/default.jpg');
       }
       return { ...prev, images: updatedImages };
     });
   };
-
-    // Fonctions pour naviguer dans le carrousel
-  const handlePrevImage = useCallback(() => {
-    if (!bateau || !bateau.images || bateau.images.length === 0) return;
-    setCurrentImageIndex(prevIndex =>
-      prevIndex === 0 ? bateau.images.length - 1 : prevIndex - 1
-    );
-  }, [bateau]);
-
-  const handleNextImage = useCallback(() => {
-    if (!bateau || !bateau.images || bateau.images.length === 0) return;
-    setCurrentImageIndex(prevIndex =>
-      prevIndex === bateau.images.length - 1 ? 0 : prevIndex + 1
-    );
-  }, [bateau]);
 
   // Fonction générique pour les actions (soumission, duplication, suppression)
   const performAuthenticatedAction = async (actionFn) => {
@@ -488,12 +458,6 @@ const handleRemoveEquipement = (index) => {
   // ET l'utilisateur est admin OU le propriétaire du bateau.
   const canDelete = user && !isExampleBoat && (user.role === 'admin' || bateau.userId === user.uid);
 
-    // Détermine l'image à afficher dans le carrousel
-  const displayedImageUrl = (bateau.images && bateau.images.length > 0) 
-                            ? bateau.images[currentImageIndex] 
-                            : '/images/default.jpg';
-  const hasMultipleImages = bateau.images && bateau.images.length > 1;
-
   return (
     <div className="container mx-auto p-4 max-w-7xl bg-white shadow-lg rounded-lg my-8">
       <Link href="/bateaux" className="text-blue-600 hover:underline mb-4 inline-block">&larr; Retour à la liste</Link>
@@ -554,50 +518,21 @@ const handleRemoveEquipement = (index) => {
           </div>
 
           <div className="flex flex-col space-y-4">
-            {/* Conteneur du carrousel de l'image principale */}
-            <div className="flex-shrink-0 mb-4 text-center relative h-96 group"> 
-              <label htmlFor="imageUrlInput" className="block text-sm font-medium text-gray-700 mb-2">Image Principale Actuelle</label>
-              {displayedImageUrl ? (
-                <>
-                  <Image
-                    key={displayedImageUrl} // Change la clé pour forcer le re-render et la transition
-                    src={displayedImageUrl}
-                    alt="Image principale du bateau"
-                    fill // Utilisez 'fill' pour que l'image remplisse le conteneur parent
-                    className="rounded-lg shadow-md border border-gray-300 object-contain transition-opacity duration-500 ease-in-out" // Transition de fondu
-                    onError={(e) => { e.target.onerror = null; e.target.src = '/images/default.jpg'; }}
-                    unoptimized
-                  />
-
-                  {hasMultipleImages && (
-                    <>
-                      {/* Bouton Précédent */}
-                      <button
-                        type="button"
-                        onClick={handlePrevImage}
-                        className="absolute left-0 top-1/2 -translate-y-1/2 bg-black bg-opacity-50 text-white p-2 rounded-full ml-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                        aria-label="Image précédente"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                        </svg>
-                      </button>
-                      {/* Bouton Suivant */}
-                      <button
-                        type="button"
-                        onClick={handleNextImage}
-                        className="absolute right-0 top-1/2 -translate-y-1/2 bg-black bg-opacity-50 text-white p-2 rounded-full mr-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                        aria-label="Image suivante"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                        </svg>
-                      </button>
-                  </>
-                  )}
-                </>
+            <div className="flex-shrink-0 mb-4 text-center">
+              
+              {selectedMainImage ? (
+                <Image
+                  src={selectedMainImage}
+                  alt="Image principale du bateau"
+                  width={600}
+                  height={400}
+                  style={{ objectFit: 'contain' }}
+                  className="rounded-lg shadow-md mx-auto border border-gray-300 w-full h-auto max-h-96"
+                  onError={(e) => { e.target.onerror = null; e.target.src = '/images/default.jpg'; setSelectedMainImage('/images/default.jpg'); }}
+                  unoptimized
+                />
               ) : (
-                <div className="w-full h-full bg-gray-200 flex items-center justify-center rounded-lg text-gray-500 border border-gray-300 mx-auto">
+                <div className="w-full h-64 bg-gray-200 flex items-center justify-center rounded-lg text-gray-500 border border-gray-300 mx-auto">
                   Aucune image principale sélectionnée.
                 </div>
               )}
@@ -613,8 +548,8 @@ const handleRemoveEquipement = (index) => {
                       width={80}
                       height={60}
                       objectFit="cover"
-                      className={`rounded-md border-2 cursor-pointer ${currentImageIndex === index ? 'border-blue-500' : 'border-gray-300'} group-hover:border-blue-400 transition`}
-                      onClick={() => setCurrentImageIndex(index)} // Met à jour l'index directement
+                      className={`rounded-md border-2 cursor-pointer ${selectedMainImage === imgUrl ? 'border-blue-500' : 'border-gray-300'} group-hover:border-blue-400 transition`}
+                      onClick={() => setSelectedMainImage(imgUrl)}
                       onError={(e) => { e.target.onerror = null; e.target.src = '/images/default.jpg'; }}
                       unoptimized
                     />
@@ -654,7 +589,8 @@ const handleRemoveEquipement = (index) => {
                   Note : Les images seront stockées localement sur le serveur de développement. Pour la production, une solution de stockage cloud est recommandée.
               </p>
             </div>
-          </div>        </div>
+          </div>
+        </div>
 
 
 {/* Section Tableau des Équipements */}
@@ -701,8 +637,7 @@ const handleRemoveEquipement = (index) => {
       </div>
     </div>
     <div className="col-span-1 text-center">Dépense</div>
-    <div className="col-span-3 text-center">Remarque</div>
-    <div className="col-span-1 text-center">supp.</div>
+    <div className="col-span-4 text-center">Remarque</div>
   </div>
 
   {/* Corps des données */}

@@ -2,14 +2,17 @@
 import { NextResponse } from 'next/server';
 import { adminDb } from '../../../lib/firebaseAdmin';
 import { authenticateServerSide } from '../../../lib/authMiddleware';
-// Importez admin pour accéder à admin.firestore.FieldValue.serverTimestamp()
+import { FieldValue } from 'firebase-admin/firestore';
 import * as admin from 'firebase-admin';
 
-// GET /api/bateaux - Récupère la liste des bateaux en fonction des permissions de l'utilisateur
+// GET /api/bateaux
 export async function GET(request) {
   try {
-    // Correction: Passer l'objet 'request' complet à authenticateServerSide
-    const user = await authenticateServerSide(request);
+    // Récupérer le token Authorization
+    const authorization = request.headers.get('authorization') || '';
+
+    // Passer uniquement le token à authenticateServerSide
+    const user = await authenticateServerSide(authorization);
 
     const snapshot = await adminDb.collection('bateaux').get();
     const allBateaux = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -28,16 +31,16 @@ export async function GET(request) {
 
     return NextResponse.json(bateaux);
   } catch (error) {
-    console.error("Erreur récupération bateaux (GET /api/bateaux):", error);
+    console.error("Erreur récupération bateaux:", error);
     return NextResponse.json({ message: "Erreur interne du serveur" }, { status: 500 });
   }
 }
 
-// POST /api/bateaux - Crée un nouveau bateau
+// POST /api/bateaux
 export async function POST(request) {
   try {
-    // Correction: Passer l'objet 'request' complet à authenticateServerSide
-    const user = await authenticateServerSide(request);
+    const authorization = request.headers.get('authorization') || '';
+    const user = await authenticateServerSide(authorization);
     if (!user) {
       return NextResponse.json({ message: 'Non authentifié' }, { status: 401 });
     }
@@ -64,9 +67,8 @@ export async function POST(request) {
     const newBateauData = {
       ...data,
       userId: user.uid,
-      // Correction: Utiliser admin.firestore.FieldValue.serverTimestamp() pour le SDK Admin
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
       images: Array.isArray(data.images) ? data.images : [],
       equipements: Array.isArray(data.equipements) ? data.equipements : [],
     };
@@ -76,7 +78,7 @@ export async function POST(request) {
 
     return NextResponse.json({ id: String(newId), ...newBateauData }, { status: 201 });
   } catch (error) {
-    console.error('Erreur création bateau séquentielle (POST /api/bateaux) :', error);
+    console.error('Erreur création bateau séquentielle :', error);
     return NextResponse.json({ message: 'Échec de la création du bateau' }, { status: 500 });
   }
 }

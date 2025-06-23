@@ -5,8 +5,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../../lib/firebase';
-import { setCookie } from 'nookies'; // Importe setCookie de nookies
+import { auth } from '../../lib/firebase'; // Assurez-vous que le chemin est correct
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -21,28 +20,9 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const idToken = await userCredential.user.getIdToken(); // Récupère le token d'ID
-
-      // IMPORTANT : Définir le cookie de session qui sera lu par les Server Components
-      setCookie(null, 'firebaseIdToken', idToken, {
-        maxAge: 30 * 24 * 60 * 60, // Expire après 30 jours (ajustez selon votre politique de session)
-        path: '/', // Le cookie est disponible sur tout le chemin du site
-        secure: process.env.NODE_ENV === 'production', // 'true' en production (HTTPS), 'false' en développement (HTTP)
-        httpOnly: false, // Doit être 'false' pour être défini par le JavaScript client
-        sameSite: 'Lax', // Bonne pratique pour la sécurité et la compatibilité
-      });
-
+      await signInWithEmailAndPassword(auth, email, password);
       console.log('Connexion réussie !');
-      console.log('Tentative de définition du cookie firebaseIdToken avec les propriétés suivantes:');
-      console.log('  Valeur (début):', idToken.substring(0, 20) + '...');
-      console.log('  maxAge:', 30 * 24 * 60 * 60);
-      console.log('  path:', '/');
-      console.log('  secure:', process.env.NODE_ENV === 'production');
-      console.log('  httpOnly:', false);
-      console.log('  sameSite:', 'Lax');
-
-      router.push('/'); // Redirige vers la page d'accueil après connexion
+      router.push('/bateaux'); // Redirige vers la page d'accueil après connexion
     } catch (e) {
       console.error('Erreur de connexion:', e.message);
       let errorMessage = "Erreur de connexion. Veuillez vérifier vos identifiants.";

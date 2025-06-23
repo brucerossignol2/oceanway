@@ -4,6 +4,7 @@
 import Link from 'next/link';
 import { useAuth } from './AuthContext'; // Importe notre hook d'authentification
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 
 export default function Navbar() {
   const { user, loadingAuth, signOut } = useAuth();
@@ -22,8 +23,17 @@ export default function Navbar() {
   return (
     <nav className="bg-white shadow-md p-4 sticky top-0 z-50">
       <div className="container mx-auto flex justify-between items-center">
-        <Link href="/" className="text-2xl font-bold text-gray-800 hover:text-blue-600 transition-colors">
-          ⛵ OceanWay
+        <Link href="/" className="flex items-center space-x-3">
+          <Image
+            src="/logo-oceanway.png" // Le chemin depuis `/public`
+            alt="Logo OceanWay"
+            width={40}
+            height={40}
+            className="w-10 h-10 object-contain"
+          />
+          <span className="text-2xl font-bold text-gray-800 hover:text-blue-600 transition-colors">
+            OceanWay
+          </span>
         </Link>
         <div className="space-x-4">
           {!loadingAuth && ( // N'affiche les liens qu'une fois l'état d'authentification chargé
