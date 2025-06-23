@@ -1,0 +1,7 @@
+0000000000000000000000000000000000000000 c5a9e0d66c99e19d7ee8ee846062432e69ec89e5 BruceRossignol <rossignol.bruce@gmail.com> 1750065688 +0200	commit (initial): Initial commit from Create Next App
+c5a9e0d66c99e19d7ee8ee846062432e69ec89e5 64aa95307b6b5e852c2c0abba6cc72adab60e87e BruceRossignol <rossignol.bruce@gmail.com> 1750079050 +0200	commit: Initial commit for Next.js app
+64aa95307b6b5e852c2c0abba6cc72adab60e87e 0000000000000000000000000000000000000000 BruceRossignol <rossignol.bruce@gmail.com> 1750079050 +0200	Branch: renamed refs/heads/master to refs/heads/main
+0000000000000000000000000000000000000000 64aa95307b6b5e852c2c0abba6cc72adab60e87e BruceRossignol <rossignol.bruce@gmail.com> 1750079050 +0200	Branch: renamed refs/heads/master to refs/heads/main
+64aa95307b6b5e852c2c0abba6cc72adab60e87e a520ef31b967a066111dc839b28b5974611404c2 BruceRossignol <rossignol.bruce@gmail.com> 1750079647 +0200	commit: Premier transfert
+a520ef31b967a066111dc839b28b5974611404c2 7747f51aabe7ed35a6636257f6ff3363450e166b BruceRossignol <rossignol.bruce@gmail.com> 1750234785 +0200	commit: Version avec base JSON
+7747f51aabe7ed35a6636257f6ff3363450e166b 5bce4b7c9ed90ab0c64edbbd824e9905ea097466 BruceRossignol <rossignol.bruce@gmail.com> 1750707292 +0200	commit: remis la version avec images en local

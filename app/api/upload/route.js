@@ -1,104 +1,53 @@
 // app/api/upload/route.js
-// Cette route API gère l'upload de fichiers vers Google Cloud Storage.
-
-import { Storage } from '@google-cloud/storage';
 import { NextResponse } from 'next/server';
-import { Readable } from 'stream';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { v4 as uuidv4 } from 'uuid'; // Pour générer des noms de fichiers uniques
 
-// Il est crucial que le fichier JSON des identifiants du compte de service soit disponible
-// via une variable d'environnement. Pour Vercel, vous collerez le contenu JSON
-// dans une variable nommée GOOGLE_APPLICATION_CREDENTIALS_JSON.
-// Pour le développement local, assurez-vous d'avoir cette variable dans .env.local.
-const credentials = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON
-  ? JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON)
-  : null;
+// Installez uuid si ce n'est pas déjà fait: npm install uuid
 
-// Initialise le client Google Cloud Storage avec les identifiants.
-// Si les identifiants ne sont pas chargés, le client ne sera pas initialisé.
-const storage = credentials
-  ? new Storage({
-      projectId: credentials.project_id,
-      credentials: {
-        client_email: credentials.client_email,
-        private_key: credentials.private_key,
-      },
-    })
-  : null;
+// Chemin où les images seront stockées dans le dossier public
+const UPLOAD_DIR = path.join(process.cwd(), 'public', 'images');
 
-// Nom de votre bucket GCS. Assurez-vous que cette variable est aussi configurée
-// dans vos variables d'environnement Vercel et .env.local (ex: NEXT_PUBLIC_GCS_BUCKET_NAME).
-const bucketName = process.env.NEXT_PUBLIC_GCS_BUCKET_NAME;
-
-// Gère les requêtes POST pour l'upload de fichiers
 export async function POST(request) {
-  // Vérifie si les identifiants ou le nom du bucket sont manquants
-  if (!storage || !bucketName) {
-    console.error("GCS configuration missing: storage client or bucket name not initialized.");
-    return NextResponse.json(
-      { message: 'Erreur de configuration du serveur pour GCS.' },
-      { status: 500 }
-    );
-  }
-
   try {
-    // Parse les données du formulaire de la requête
-    const formData = await request.formData();
-    const file = formData.get('file'); // 'file' est le nom du champ dans le formulaire
+    // Vérifier si le répertoire d'upload existe, sinon le créer
+    await fs.mkdir(UPLOAD_DIR, { recursive: true });
 
-    // Vérifie si un fichier a été envoyé
-    if (!file) {
+    const formData = await request.formData();
+    const files = formData.getAll('files'); // Récupère tous les fichiers sous la clé 'files'
+
+    if (!files || files.length === 0) {
       return NextResponse.json({ message: 'Aucun fichier fourni.' }, { status: 400 });
     }
 
-    // Convertit le fichier en un buffer et le nom du fichier
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const fileName = `${Date.now()}_${file.name.replace(/\s/g, '_')}`; // Crée un nom de fichier unique
+    const uploadedFilePaths = [];
 
-    const gcsFile = storage.bucket(bucketName).file(fileName);
+    for (const file of files) {
+      if (!(file instanceof File)) {
+        console.warn('Un élément du formulaire n\'est pas un objet File :', file);
+        continue; // Passer aux éléments non-fichier
+      }
 
-    // Crée un flux lisible à partir du buffer
-    const stream = new Readable();
-    stream.push(buffer);
-    stream.push(null); // Indique la fin du flux
+      const bytes = await file.arrayBuffer();
+      const buffer = Buffer.from(bytes);
 
-    // Options pour l'upload, y compris le type de contenu
-    const options = {
-      contentType: file.type,
-      predefinedAcl: 'publicRead', // Rend le fichier publiquement accessible après l'upload
-                                   // Assurez-vous que votre bucket a les permissions 'allUsers: Storage Object Viewer'
-    };
+      // Générer un nom de fichier unique pour éviter les collisions
+      const fileExtension = path.extname(file.name);
+      const uniqueFileName = `${uuidv4()}${fileExtension}`;
+      const filePath = path.join(UPLOAD_DIR, uniqueFileName);
 
-    // Upload le fichier vers GCS
-    await new Promise((resolve, reject) => {
-      stream.pipe(gcsFile.createWriteStream(options))
-        .on('error', (err) => {
-          console.error('Erreur lors de l\'upload vers GCS:', err);
-          reject(err);
-        })
-        .on('finish', () => {
-          resolve();
-        });
-    });
+      await fs.writeFile(filePath, buffer);
+      uploadedFilePaths.push(`/images/${uniqueFileName}`); // URL publique de l'image
+    }
 
-    // Construit l'URL publique de l'image.
-    // Pour les buckets configurés en 'Uniform access' et 'allUsers: Storage Object Viewer',
-    // l'URL est de la forme: https://storage.googleapis.com/your-bucket-name/your-file-name
-    const publicUrl = `https://storage.googleapis.com/${bucketName}/${fileName}`;
-
-    return NextResponse.json({ url: publicUrl }, { status: 200 });
+    return NextResponse.json({
+      message: 'Fichiers téléchargés avec succès',
+      urls: uploadedFilePaths,
+    }, { status: 200 });
 
   } catch (error) {
-    console.error('Erreur lors de l\'upload:', error);
-    return NextResponse.json(
-      { message: 'Échec de l\'upload du fichier.', error: error.message },
-      { status: 500 }
-    );
+    console.error('Erreur lors du téléchargement des fichiers :', error);
+    return NextResponse.json({ message: 'Échec du téléchargement des fichiers', error: error.message }, { status: 500 });
   }
 }
-
-// Exportez une fonction OPTIONS pour gérer les requêtes CORS si nécessaire,
-// bien que Next.js le gère souvent automatiquement.
-export async function OPTIONS() {
-  return NextResponse.json({}, { status: 200 });
-}
-
