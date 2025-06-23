@@ -15,7 +15,7 @@ export default function HomePage() {
       {/* 2. Votre contenu habituel */}
       <section className="container mx-auto p-7">
         <h1 className="text-4xl font-bold mb-4">
-          OceanWay, votre passeport pour le grand large.
+          OceanWay, votre passeport1 pour le grand large.
         </h1>
         <p className="text-lg text-gray-700 mb-8">
           Enregistrez votre voilier de navigation hauturière sur lequel vous avez une intention d'achat, visualisez votre projet global de dépense et anticipez sereinement le budget nécessaire pour une traversée au long cours.
