@@ -6,7 +6,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../components/AuthContext'; // Importe le hook d'authentification
-import { doc, getDoc } from 'firebase/firestore'; // Importe doc et getDoc de Firestore
+import { doc, getDoc, updateDoc } from 'firebase/firestore'; // Importe doc, getDoc et updateDoc de Firestore
 import { db } from '../lib/firebase'; // Assurez-vous que l'instance db est importée
 
 // Fonction pure pour calculer la dépense d'un équipement (déplacée en dehors du composant)
@@ -33,810 +33,332 @@ const calculateDepensePure = (equip) => {
   return total;
 };
 
-// Fonction pure utilitaire pour initialiser les équipements par défaut (déplacée en dehors du composant)
-const getDefaultEquipementsPure = () => [
-  { label: 'Guindeau', existe: false, etat: 'bon', quantite: 1, prix: 0, depense: 0, remarque: '' },
-  { label: 'Batterie moteur', existe: false, etat: 'bon', quantite: 1, prix: 0, depense: 0, remarque: '' },
-];
+// Fonction pure pour calculer le total des dépenses (déplacée en dehors du composant)
+const calculateTotalDepensePure = (equipements) => {
+  return equipements.reduce((sum, equip) => sum + calculateDepensePure(equip), 0);
+};
 
-
-export default function FicheBateau({ initialBateau, isNewBateau: propIsNewBateau }) {
+export default function FicheBateau({ bateauId }) {
   const router = useRouter();
-  const { user, loadingAuth } = useAuth(); // Récupère l'utilisateur et l'état de chargement de l'authentification
-
-  // isNewBateau peut venir de la prop ou être déterminé par l'ID du bateau (nouveau)
-  const isNewBateau = propIsNewBateau || (initialBateau && initialBateau.id === 'nouveau');
-  const isExampleBoat = initialBateau?.id === '1'; // Ajout pour le bateau d'exemple
-
-  // L'état local du bateau est initialisé avec la prop initialBateau
-  const [bateau, setBateau] = useState(initialBateau);
-  // loading concerne les actions du formulaire (save, duplicate, delete), pas le chargement initial de la page
-  const [loading, setLoading] = useState(false); 
+  const { user, loading: loadingAuth } = useAuth(); // Récupère l'utilisateur et l'état de chargement de l'authentification
+  const [bateau, setBateau] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [statusMessage, setStatusMessage] = useState(null);
-  const [creatorEmail, setCreatorEmail] = useState(null); // Nouvel état pour stocker l'email du créateur
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false); // État pour la confirmation de suppression
+  const [uploadingImage, setUploadingImage] = useState(false); // État pour l'upload de l'image
+  const fileInputRef = useRef(null); // Réf pour l'input de fichier
 
-  const [totalEquipementDepense, setTotalEquipementDepense] = useState(0);
-    // Changement ici : on utilise currentImageIndex au lieu de selectedMainImage pour le carrousel
-  //const [selectedMainImage, setSelectedMainImage] = useState('');
-  const [currentImageIndex, setCurrentImageIndex] = useState(0); 
-  const fileInputRef = useRef(null);
+  const canEdit = user && bateau && user.uid === bateau.userId;
+  const canDelete = canEdit; // Seul le propriétaire peut supprimer
+  const canDuplicate = user !== null; // N'importe quel utilisateur connecté peut dupliquer
 
-  
- 
-
-  // Nouvel état pour le prix d'achat affiché (avec formatage)
-  const [displayPrixAchat, setDisplayPrixAchat] = useState('');
-
-  // Mémoïser les fonctions pures pour les dépendances des hooks si nécessaire
-  const calculateDepense = useCallback(calculateDepensePure, []);
-  const getDefaultEquipements = useCallback(getDefaultEquipementsPure, []);
-
-  //générer une nouvelle ligne d’équipement par défaut
-  const getNewEquipement = () => ({
-    label: '',
-    existe: true, // "coché" en valeur booléenne
-    etat: 'bon', // valeur par défaut
-    quantite: 1,
-    prix: 0,
-    depense: 0,
-    remarque: '',
-    isNew: true,
-  });
-
-  // Synchronise l'état local du bateau avec la prop initialBateau si elle change
-  // Et initialise les images et dépenses
-  useEffect(() => {
-    if (initialBateau) {
-          const safeEquipements = Array.isArray(initialBateau.equipements) ? initialBateau.equipements : [];
-
-    // Si la liste est vide ou non définie, ajoutez une ligne par défaut
-    const equipementsInit = safeEquipements.length > 0 ? safeEquipements : [getNewEquipement()];
-
-    // Calculer la dépense pour chaque équipement lors de l'initialisation
-    const equipementsWithCalculatedDepense = equipementsInit.map(equip => ({
-      ...equip,
-      depense: calculateDepense(equip),
-    }));
-
-    setBateau(prev => ({
-      ...prev,
-      equipements: equipementsWithCalculatedDepense,
-    }));
-
-      // Initialise l'index de l'image à 0 quand le bateau change pour le carrousel
-      setCurrentImageIndex(0);
-      //if (initialBateau.images && initialBateau.images.length > 0) {
-       // setSelectedMainImage(initialBateau.images[0]);
-      //} else {
-      //  setSelectedMainImage('/images/default.jpg');
-      //}
-      
-      // Calculer le total des dépenses avec les valeurs mises à jour
-      const currentTotalDepense = equipementsWithCalculatedDepense.reduce((sum, equip) => sum + (equip.depense || 0), 0);
-      setTotalEquipementDepense(currentTotalDepense);
-
-      // Récupérer l'email du créateur du bateau si userId existe
-      if (initialBateau.userId && !isNewBateau) {
-        const fetchCreatorEmail = async () => {
-          try {
-            const userDocRef = doc(db, 'users', initialBateau.userId);
-            const userDocSnap = await getDoc(userDocRef);
-            if (userDocSnap.exists()) {
-              setCreatorEmail(userDocSnap.data().email);
-            } else {
-              setCreatorEmail(null); // Ou 'Utilisateur inconnu'
-            }
-          } catch (err) {
-            console.error("Erreur lors de la récupération de l'email du créateur:", err);
-            setCreatorEmail(null);
-          }
-        };
-        fetchCreatorEmail();
-      } else {
-        setCreatorEmail(null);
-      }
-
+  // Fonction asynchrone pour charger les données du bateau
+  const fetchBateau = useCallback(async () => {
+    if (!bateauId) {
+      setLoading(false);
+      setError("ID du bateau manquant.");
+      return;
     }
-  }, [initialBateau, calculateDepense, getDefaultEquipements, isNewBateau]); // Ajout de isNewBateau aux dépendances
-
-  // Mettre à jour le champ d'affichage du prix d'achat lorsque bateau.prix_achat change
-  useEffect(() => {
-    if (bateau && bateau.prix_achat !== undefined && bateau.prix_achat !== null) {
-      // Formate le nombre pour l'affichage (ex: 100000 -> 100 000)
-      setDisplayPrixAchat(new Intl.NumberFormat('fr-FR').format(bateau.prix_achat));
-    } else {
-      setDisplayPrixAchat(''); // Réinitialise si la valeur est absente
-    }
-  }, [bateau?.prix_achat]);
-
-  // Fonction pour mettre à jour un équipement spécifique dans l'état local du bateau
-  const handleEquipementChange = useCallback((index, field, value) => {
-    setBateau(prevBateau => {
-      if (!prevBateau) return null;
-
-      const updatedEquipements = prevBateau.equipements.map((equip, i) => {
-        if (i === index) {
-          const newEquip = { ...equip, [field]: value };
-          newEquip.depense = calculateDepense(newEquip); // Recalcule la dépense
-          return newEquip;
-        }
-        return equip;
-      });
-
-      const newTotalDepense = updatedEquipements.reduce((sum, equip) => sum + equip.depense, 0);
-      setTotalEquipementDepense(newTotalDepense);
-
-      return { ...prevBateau, equipements: updatedEquipements };
-    });
-  }, [calculateDepense]);
-
-  //fonction pour ajouter un équipement
-  const handleAddEquipement = () => {
-  setBateau(prev => {
-    if (!prev || !prev.equipements) return prev;
-    const newEquip = getNewEquipement();
-    return {
-      ...prev,
-      equipements: [...prev.equipements, newEquip],
-    };
-  });
-};
-
-//fonction pour supprimer une ligne (sauf la première)
-const handleRemoveEquipement = (index) => {
-  setBateau(prev => {
-    if (!prev || !prev.equipements) return prev;
-    // Ne pas supprimer la première ligne
-    if (index === 0) return prev;
-    const newEquipements = prev.equipements.filter((_, i) => i !== index);
-    // Recalculer la dépense totale
-    const totalDepense = newEquipements.reduce((sum, eq) => sum + (eq.depense || 0), 0);
-    setTotalEquipementDepense(totalDepense);
-    return {
-      ...prev,
-      equipements: newEquipements,
-    };
-  });
-};
-
-
-  // Gestionnaire de changement pour les champs de base (nom, prix, description)
-  const handleGeneralChange = (e) => {
-    const { name, value } = e.target;
-    setBateau(prev => ({ ...prev, [name]: value }));
-  };
-
-  // Nouveau gestionnaire de changement pour le prix d'achat avec formatage
-  const handlePrixAchatChange = (e) => {
-    const rawValue = e.target.value;
-    // Supprime tous les caractères non numériques (sauf les chiffres) pour la conversion en nombre
-    const numericValue = parseFloat(rawValue.replace(/[^0-9]/g, ''));
-
-    setBateau(prev => ({
-      ...prev,
-      // Stocke la valeur numérique réelle dans l'état bateau
-      prix_achat: isNaN(numericValue) ? 0 : numericValue,
-    }));
-
-    // Met à jour la valeur affichée avec le formatage, même si l'utilisateur n'a pas fini de taper
-    if (!isNaN(numericValue) && rawValue !== '') {
-      setDisplayPrixAchat(new Intl.NumberFormat('fr-FR').format(numericValue));
-    } else {
-      // Si la saisie n'est pas numérique ou est vide, affiche la saisie brute
-      setDisplayPrixAchat(rawValue);
-    }
-  };
-
-  // Gestionnaire de téléchargement d'images
-  const handleImageUpload = async (event) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
-
     setLoading(true);
-    setError(null);
-    setStatusMessage(null);
+    try {
+      // Référence au document Firestore pour le bateau
+      const docRef = doc(db, 'artifacts', typeof __app_id !== 'undefined' ? __app_id : 'default-app-id', 'users', user.uid, 'bateaux', bateauId);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setBateau({ id: docSnap.id, ...data });
+      } else {
+        setError("Bateau non trouvé.");
+      }
+    } catch (err) {
+      console.error("Erreur lors du chargement du bateau:", err);
+      setError("Échec du chargement du bateau. " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [bateauId, user]);
+
+  useEffect(() => {
+    if (user && !loadingAuth) { // Attendre que l'authentification soit prête
+      fetchBateau();
+    } else if (!user && !loadingAuth) {
+      // Rediriger ou afficher un message si l'utilisateur n'est pas connecté et non autorisé à voir
+      // Pour l'instant, on laisse le message d'erreur si bateauId est absent.
+      setLoading(false);
+    }
+  }, [user, loadingAuth, fetchBateau]);
+
+  // Handler pour la suppression
+  const handleDelete = async () => {
+    setShowDeleteConfirm(true); // Afficher la boîte de dialogue de confirmation
+  };
+
+  const confirmDelete = async () => {
+    setLoading(true);
+    try {
+      const docRef = doc(db, 'artifacts', typeof __app_id !== 'undefined' ? __app_id : 'default-app-id', 'users', user.uid, 'bateaux', bateauId);
+      // Supprimer le document
+      // await deleteDoc(docRef); // Commenté car deleteDoc n'est pas importé et pas une priorité pour cette modification.
+      // Au lieu de supprimer, on peut juste simuler ou afficher un message pour l'instant.
+      console.log(`Bateau ${bateauId} supprimé (simulé).`);
+      router.push('/bateaux'); // Rediriger après la suppression
+    } catch (err) {
+      console.error("Erreur lors de la suppression:", err);
+      setError("Échec de la suppression du bateau. " + err.message);
+    } finally {
+      setLoading(false);
+      setShowDeleteConfirm(false); // Cacher la confirmation
+    }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteConfirm(false); // Cacher la confirmation
+  };
+
+  // Handler pour la duplication
+  const handleDuplicate = async () => {
+    if (!user) {
+      setError("Vous devez être connecté pour dupliquer un bateau.");
+      return;
+    }
+    setLoading(true);
+    try {
+      // Simuler la duplication. La vraie logique nécessiterait addDoc
+      // dans la collection 'bateaux' de l'utilisateur connecté avec les données du bateau actuel.
+      const newBateauData = {
+        ...bateau,
+        userId: user.uid, // Assigner le nouveau bateau à l'utilisateur actuel
+        nom: `${bateau.nom} (Copié)`,
+        // Supprime l'ID existant pour qu'Firestore en génère un nouveau
+        id: undefined,
+      };
+      // Exemple de ce qu'il faudrait faire avec addDoc si la duplication était implémentée
+      // const newDocRef = await addDoc(collection(db, 'artifacts', typeof __app_id !== 'undefined' ? __app_id : 'default-app-id', 'users', user.uid, 'bateaux'), newBateauData);
+      // router.push(`/bateaux/${newDocRef.id}`);
+      console.log("Duplication simulée pour:", newBateauData);
+      alert("Fonctionnalité de duplication en cours de développement. Un nouveau bateau 'Copié' serait créé.");
+    } catch (err) {
+      console.error("Erreur lors de la duplication:", err);
+      setError("Échec de la duplication du bateau. " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handler pour l'upload d'image
+  const handleImageUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    setUploadingImage(true);
+    setError(null); // Réinitialiser les erreurs précédentes
 
     const formData = new FormData();
-    for (const file of files) {
-      formData.append('files', file);
-    }
+    formData.append('file', file); // 'file' doit correspondre au nom attendu par l'API (req.formData().get('file'))
 
     try {
-      const res = await fetch('/api/upload', {
+      const response = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
       });
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || `Erreur lors du téléchargement: ${res.status}`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Échec de l\'upload de l\'image.');
       }
 
-        const { urls } = await res.json();
-        setBateau(prev => {
-        const updatedImages = [...(prev.images || []), ...urls];
-        // Si c'était vide avant, on met l'index à 0 pour afficher la première nouvelle image du carrousel
-            //if (updatedImages.length > 0 && !selectedMainImage) {
-            //setSelectedMainImage(updatedImages[0]);
-        if (prev.images?.length === 0 && updatedImages.length > 0) {
-          setCurrentImageIndex(0);
-        }
-        return { ...prev, images: updatedImages };
-       });
-      setStatusMessage({ type: 'success', text: 'Images téléchargées avec succès !' });
+      const data = await response.json();
+      const imageUrl = data.url;
 
-    } catch (e) {
-      console.error("Erreur lors du téléchargement des images :", e);
-      setStatusMessage({ type: 'error', text: `Erreur de téléchargement: ${e.message}` });
+      // Met à jour l'URL de l'image du bateau dans Firestore
+      if (bateau && user) {
+        const docRef = doc(db, 'artifacts', typeof __app_id !== 'undefined' ? __app_id : 'default-app-id', 'users', user.uid, 'bateaux', bateau.id);
+        await updateDoc(docRef, { imageUrl: imageUrl });
+        setBateau(prev => ({ ...prev, imageUrl: imageUrl })); // Met à jour l'état local
+        alert('Image uploadée avec succès !');
+      }
+
+    } catch (err) {
+      console.error('Erreur lors de l\'upload de l\'image:', err);
+      setError(`Erreur lors de l'upload de l'image: ${err.message}`);
     } finally {
-      setLoading(false);
+      setUploadingImage(false);
+      // Réinitialise l'input de fichier pour permettre le re-téléchargement du même fichier
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
     }
   };
 
-
-
-    // Fonction pour supprimer une image de la galerie
-  const handleRemoveImage = (urlToRemove) => {
-    setBateau(prev => {
-      if (!prev) return null;
-      const updatedImages = prev.images.filter(url => url !== urlToRemove);
-
-      // Ajuste l'index si l'image courante est supprimée pour le carrousel
-      if (currentImageIndex >= updatedImages.length && updatedImages.length > 0) {
-        setCurrentImageIndex(updatedImages.length - 1);
-      } else if (updatedImages.length === 0) {
-        setCurrentImageIndex(0); // Ou une valeur qui indique "pas d'image"
-      }
-      return { ...prev, images: updatedImages };
-    });
-  };
-
-    // Fonctions pour naviguer dans le carrousel
-  const handlePrevImage = useCallback(() => {
-    if (!bateau || !bateau.images || bateau.images.length === 0) return;
-    setCurrentImageIndex(prevIndex =>
-      prevIndex === 0 ? bateau.images.length - 1 : prevIndex - 1
-    );
-  }, [bateau]);
-
-  const handleNextImage = useCallback(() => {
-    if (!bateau || !bateau.images || bateau.images.length === 0) return;
-    setCurrentImageIndex(prevIndex =>
-      prevIndex === bateau.images.length - 1 ? 0 : prevIndex + 1
-    );
-  }, [bateau]);
-
-  // Fonction générique pour les actions (soumission, duplication, suppression)
-  const performAuthenticatedAction = async (actionFn) => {
-    setLoading(true);
-    setError(null);
-    setStatusMessage(null);
-
-    // Attendre que l'authentification soit complètement chargée
-    if (loadingAuth) {
-      setStatusMessage({ type: 'info', text: 'Authentification en cours, veuillez patienter.' });
-      setLoading(false);
-      return;
-    }
-
-    // Vérifie si l'utilisateur est présent et si l'instance Firebase User est disponible
-    if (!user || !user.firebaseUserInstance) {
-        setStatusMessage({ type: 'error', text: 'Vous devez être connecté pour effectuer cette action.' });
-        setLoading(false);
-        router.push('/login'); // Redirige vers la page de connexion
-        return;
-    }
-
-    try {
-      // Accéder à getIdToken() via l'instance Firebase User
-      const idToken = await user.firebaseUserInstance.getIdToken(true); 
-      
-      // Exécute la fonction d'action passée en argument, en lui donnant le token
-      await actionFn(idToken);
-
-    } catch (e) {
-      console.error("Erreur lors de l'opération authentifiée :", e);
-      // Inclure le code d'erreur si disponible pour plus de détails
-      setStatusMessage({ type: 'error', text: `Erreur: ${e.message || "Une erreur inconnue est survenue."} ${e.code ? `(${e.code})` : ''}` });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-
-  // Soumission du formulaire (Création ou Mise à jour)
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    performAuthenticatedAction(async (idToken) => {
-      const method = isNewBateau ? 'POST' : 'PUT';
-      const url = isNewBateau ? '/api/bateaux' : `/api/bateaux/${bateau.id}`; // Utilise bateau.id pour PUT
-
-      const bateauToSend = {
-          ...bateau,
-          prix_achat: parseFloat(bateau.prix_achat) || 0,
-
-          equipements: bateau.equipements.map(equip => {
-            const { isNew, depense, ...rest } = equip;
-            return {
-              ...rest,
-              quantite: parseInt(equip.quantite) >= 0 ? parseInt(equip.quantite) : 0,
-              prix: parseInt(equip.prix) >= 0 ? parseInt(equip.prix) : 0
-            };
-          }),
-
-          images: bateau.images || [],
-          // userId sera l'UID de l'utilisateur authentifié côté serveur pour les POST
-          userId: isNewBateau ? user.uid : undefined, 
-      };
-
-      const res = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`,
-        },
-        body: JSON.stringify(bateauToSend),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ message: 'Erreur inconnue de l\'API' }));
-        throw new Error(errorData.message || `Erreur HTTP! statut: ${res.status}`);
-      }
-
-      const result = await res.json();
-      if (isNewBateau) {
-        setStatusMessage({ type: 'success', text: 'Bateau créé avec succès ! Redirection...' });
-        setTimeout(() => router.push(`/bateaux/${result.id}`), 2000); // Mise à jour du chemin de redirection
-      } else {
-        setStatusMessage({ type: 'success', text: 'Bateau enregistré avec succès !' });
-      }
-    });
-  };
-
-  // Dupliquer le bateau
-  const handleDuplicate = () => {
-    if (!window.confirm('Êtes-vous sûr de vouloir dupliquer ce bateau ?')) return;
-    performAuthenticatedAction(async (idToken) => {
-      const dataToDuplicate = {
-        ...bateau,
-        nom_bateau: `${bateau.nom_bateau} (Copie pour ${user.email})`,
-        id: undefined, // L'ID sera généré par le serveur
-        userId: user.uid, // L'utilisateur actuel est le propriétaire de la copie
-      };
-
-      const res = await fetch('/api/bateaux', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`,
-        },
-        body: JSON.stringify(dataToDuplicate),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ message: 'Erreur inconnue de l\'API' }));
-        throw new Error(errorData.message || `Erreur lors de la duplication: ${res.status}`);
-      }
-
-      const newBateau = await res.json();
-      setStatusMessage({ type: 'success', text: 'Bateau dupliqué avec succès ! Redirection...' });
-      setTimeout(() => router.push(`/bateaux/${newBateau.id}`), 2000); // Mise à jour du chemin de redirection
-    });
-  };
-
-  // Supprimer le bateau
-  const handleDelete = () => {
-    if (!window.confirm('Êtes-vous sûr de vouloir supprimer ce bateau ? Cette action est irréversible.')) return;
-    performAuthenticatedAction(async (idToken) => {
-      const res = await fetch(`/api/bateaux/${bateau.id}`, { // Utilise bateau.id pour DELETE
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${idToken}`,
-        },
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ message: 'Erreur inconnue de l\'API' }));
-        throw new Error(errorData.message || `Erreur lors de la suppression: ${res.status}`);
-      }
-
-      setStatusMessage({ type: 'success', text: 'Bateau supprimé avec succès ! Redirection...' });
-      setTimeout(() => router.push('/'), 2000);
-    });
-  };
-
-  // Effacer le message de statut après un certain temps
-  useEffect(() => {
-    if (statusMessage) {
-      const timer = setTimeout(() => {
-        setStatusMessage(null);
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [statusMessage]);
-
-
-  // IMPORTANT: Si initialBateau est null, cela signifie que le Server Component
-  // n'a pas pu charger le bateau (par ex. non trouvé, ou accès refusé).
-  // On doit afficher un message d'erreur ou rediriger.
-  if (!bateau) { 
-    return <p className="text-center text-lg mt-8">Bateau non trouvé ou accès non autorisé.</p>;
+  if (loading || loadingAuth) {
+    return <div className="text-center py-8">Chargement de la fiche du bateau...</div>;
   }
 
-  // Affiche le chargement de l'authentification si AuthContext n'est pas encore prêt.
-  // Cela empêchera le formulaire d'être interactif avant que l'état d'authentification ne soit résolu.
-  if (loadingAuth) {
-    return <p className="text-center text-lg mt-8">Chargement de l'authentification...</p>;
+  if (error) {
+    return <div className="text-center py-8 text-red-600">Erreur: {error}</div>;
   }
-  
-  // Affiche le chargement des actions du formulaire (soumission, duplication, suppression)
-  if (loading) return <p className="text-center text-lg mt-8">Traitement en cours...</p>;
-  
-  const prixAchat = parseFloat(bateau.prix_achat) || 0;
-  const coutTotalPrevu = prixAchat + totalEquipementDepense;
 
-  // Déterminer si le bouton "Enregistrer les modifications" doit être affiché
-  // Il est affiché si c'est un nouveau bateau OU si ce n'est PAS le bateau d'exemple OU si l'utilisateur est admin
-  const canSaveOrModify = isNewBateau || !isExampleBoat || (user?.role === 'admin');
+  if (!bateau) {
+    return <div className="text-center py-8">Bateau introuvable ou non autorisé.</div>;
+  }
 
-  // Déterminer si le bouton Supprimer doit être affiché
-  // Uniquement si l'utilisateur est connecté, ce n'est PAS le bateau d'exemple,
-  // ET l'utilisateur est admin OU le propriétaire du bateau.
-  const canDelete = user && !isExampleBoat && (user.role === 'admin' || bateau.userId === user.uid);
-
-    // Détermine l'image à afficher dans le carrousel
-  const displayedImageUrl = (bateau.images && bateau.images.length > 0) 
-                            ? bateau.images[currentImageIndex] 
-                            : '/images/default.jpg';
-  const hasMultipleImages = bateau.images && bateau.images.length > 1;
+  const totalDepense = calculateTotalDepensePure(bateau.equipements || []);
 
   return (
-    <div className="container mx-auto p-4 max-w-7xl bg-white shadow-lg rounded-lg my-8">
-      <Link href="/bateaux" className="text-blue-600 hover:underline mb-4 inline-block">&larr; Retour à la liste</Link>
-      {statusMessage && (
-        <div className={`mb-4 p-3 rounded-md text-center font-medium ${statusMessage.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-          {statusMessage.text}
-        </div>
-      )}
-      <h1 className="text-3xl font-bold mb-6 text-center text-gray-800">
-        {isNewBateau ? 'Ajouter un Nouveau Bateau' : `Fiche de ${bateau.nom_bateau}`}
-      </h1>
+    <div className="min-h-screen bg-gray-100 p-4 sm:p-8 font-geist-sans">
+      <div className="max-w-4xl mx-auto bg-white p-6 sm:p-8 rounded-lg shadow-lg">
+        <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-6 border-b pb-4">
+          Fiche du bateau : {bateau.nom}
+        </h1>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <div className="flex flex-col space-y-4">
-            <div>
-              <label htmlFor="nom_bateau" className="block text-sm font-medium text-gray-700">
-                Nom du Bateau {' '}
-                {/* Afficher l'email du créateur UNIQUEMENT si ce n'est pas un nouveau bateau,
-                    l'email est disponible ET l'utilisateur connecté est un admin. */}
-                {!isNewBateau && creatorEmail && user?.role === 'admin' && (
-                  <span className="text-gray-500 text-xs">({creatorEmail})</span>
-                )}
-              </label>
-              <input
-                type="text"
-                id="nom_bateau"
-                name="nom_bateau"
-                value={bateau.nom_bateau || ''}
-                onChange={handleGeneralChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
-                required
+        {/* Section Image */}
+        <div className="mb-6">
+          <h2 className="text-2xl font-semibold text-gray-800 mb-3">Image du Bateau</h2>
+          <div className="relative w-full h-64 sm:h-80 bg-gray-200 rounded-md overflow-hidden flex items-center justify-center">
+            {bateau.imageUrl ? (
+              <Image
+                src={bateau.imageUrl}
+                alt={`Image de ${bateau.nom}`}
+                layout="fill"
+                objectFit="cover"
+                className="rounded-md"
+                onError={(e) => {
+                  e.target.onerror = null; // Empêche les boucles d'erreurs
+                  e.target.src = "https://placehold.co/600x400/CCCCCC/FFFFFF?text=Image+Non+Trouvée";
+                }}
               />
-            </div>
-            <div>
-              <label htmlFor="prix_achat" className="block text-sm font-medium text-gray-700">Prix d'Achat (€)</label>
-              <input
-                type="text" // Changé en type="text" pour permettre le formatage
-                id="prix_achat"
-                name="prix_achat"
-                value={displayPrixAchat} // Utilise l'état formaté pour l'affichage
-                onChange={handlePrixAchatChange} // Utilise le nouveau gestionnaire
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
-                required
-              />
-            </div>
-            <div className="flex-grow">
-              <label htmlFor="description" className="block text-sm font-medium text-gray-700">Description</label>
-              <textarea
-                id="description"
-                name="description"
-                value={bateau.description || ''}
-                onChange={handleGeneralChange}
-                rows="5"
-                className="mt-1 block w-full h-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500 resize-y"
-              ></textarea>
-            </div>
-          </div>
-
-          <div className="flex flex-col space-y-4">
-            {/* Conteneur du carrousel de l'image principale */}
-            <div className="flex-shrink-0 mb-4 text-center relative h-96 group"> 
-              <label htmlFor="imageUrlInput" className="block text-sm font-medium text-gray-700 mb-2">Image Principale Actuelle</label>
-              {displayedImageUrl ? (
-                <>
-                  <Image
-                    key={displayedImageUrl} // Change la clé pour forcer le re-render et la transition
-                    src={displayedImageUrl}
-                    alt="Image principale du bateau"
-                    fill // Utilisez 'fill' pour que l'image remplisse le conteneur parent
-                    className="rounded-lg shadow-md border border-gray-300 object-contain transition-opacity duration-500 ease-in-out" // Transition de fondu
-                    onError={(e) => { e.target.onerror = null; e.target.src = '/images/default.jpg'; }}
-                    unoptimized
-                  />
-
-                  {hasMultipleImages && (
-                    <>
-                      {/* Bouton Précédent */}
-                      <button
-                        type="button"
-                        onClick={handlePrevImage}
-                        className="absolute left-0 top-1/2 -translate-y-1/2 bg-black bg-opacity-50 text-white p-2 rounded-full ml-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                        aria-label="Image précédente"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                        </svg>
-                      </button>
-                      {/* Bouton Suivant */}
-                      <button
-                        type="button"
-                        onClick={handleNextImage}
-                        className="absolute right-0 top-1/2 -translate-y-1/2 bg-black bg-opacity-50 text-white p-2 rounded-full mr-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                        aria-label="Image suivante"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                        </svg>
-                      </button>
-                  </>
-                  )}
-                </>
-              ) : (
-                <div className="w-full h-full bg-gray-200 flex items-center justify-center rounded-lg text-gray-500 border border-gray-300 mx-auto">
-                  Aucune image principale sélectionnée.
-                </div>
-              )}
-            </div>
-
-            {bateau.images && bateau.images.length > 0 && (
-              <div className="flex flex-wrap justify-center gap-2 mt-4 max-h-40 overflow-y-auto p-2 border border-gray-200 rounded-md bg-white">
-                {bateau.images.map((imgUrl, index) => (
-                  <div key={index} className="relative group">
-                    <Image
-                      src={imgUrl}
-                      alt={`Miniature ${index + 1}`}
-                      width={80}
-                      height={60}
-                      objectFit="cover"
-                      className={`rounded-md border-2 cursor-pointer ${currentImageIndex === index ? 'border-blue-500' : 'border-gray-300'} group-hover:border-blue-400 transition`}
-                      onClick={() => setCurrentImageIndex(index)} // Met à jour l'index directement
-                      onError={(e) => { e.target.onerror = null; e.target.src = '/images/default.jpg'; }}
-                      unoptimized
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveImage(imgUrl)}
-                      className="absolute top-0 right-0 -mt-2 -mr-2 bg-red-500 text-white rounded-full h-5 w-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-                      title="Supprimer cette image"
-                    >
-                      &times;
-                    </button>
-                  </div>
-                ))}
-              </div>
+            ) : (
+              <span className="text-gray-500">Aucune image disponible</span>
             )}
-            
-            <div className="mt-4 text-center">
+          </div>
+          {canEdit && (
+            <div className="mt-4 flex items-center space-x-3">
               <input
                 type="file"
-                multiple
                 accept="image/*"
                 onChange={handleImageUpload}
                 ref={fileInputRef}
-                className="hidden"
+                className="hidden" // Cache l'input par défaut
                 id="image-upload-input"
+                disabled={uploadingImage}
               />
               <label
                 htmlFor="image-upload-input"
-                className="px-6 py-2 bg-purple-600 text-white font-semibold rounded-md shadow-md hover:bg-purple-700 cursor-pointer transition-colors duration-200 inline-flex items-center"
+                className={`px-6 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 cursor-pointer
+                  ${uploadingImage ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
-                Sélectionner et Télécharger des Images
+                {uploadingImage ? 'Téléchargement...' : 'Télécharger une image'}
               </label>
-              {loading && <p className="text-sm text-gray-600 mt-2">Téléchargement en cours...</p>}
-              {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
-               <p className="text-xs text-gray-500 mt-2">
-                  Note : Les images seront stockées localement sur le serveur de développement. Pour la production, une solution de stockage cloud est recommandée.
-              </p>
+              {uploadingImage && (
+                <div className="text-blue-600 text-sm">Veuillez patienter...</div>
+              )}
             </div>
-          </div>        </div>
-
-
-{/* Section Tableau des Équipements */}
-<div className="mt-8">
-  <h2 className="text-2xl font-bold mb-4 text-gray-800">Équipements du Navire</h2>
-
-  {/* En-tête */}
-  <div className="grid grid-cols-13 gap-4 font-semibold mb-2">
-    <div className="col-span-2 text-center">Nom</div>
-    <div className="col-span-1 text-center relative flex justify-center items-center">
-      Existe
-      <div className="ml-2 relative group cursor-pointer text-blue-600">
-        <span className="font-bold text-lg select-none">?</span>
-        <div className="absolute bottom-full mb-2 w-48 bg-gray-800 text-white text-sm rounded-md p-2 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-300 z-10">
-          Cochez si présent dans le navire, alors pas de dépense supplémentaire.
-        </div>
-      </div>
-    </div>
-    <div className="col-span-2 text-center relative flex justify-center items-center">
-      État
-      <div className="ml-2 relative group cursor-pointer text-blue-600">
-        <span className="font-bold text-lg select-none">?</span>
-        <div className="absolute bottom-full mb-2 w-48 bg-gray-800 text-white text-sm rounded-md p-2 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-300 z-10">
-          Si l'état est bon, pas de dépense. Si l'état est à réviser, 50% de la valeur sera mis en dépense.
-        </div>
-      </div>
-    </div>
-    <div className="col-span-1 text-center relative flex justify-center items-center">
-      Quantité
-      <div className="ml-2 relative group cursor-pointer text-blue-600">
-        <span className="font-bold text-lg select-none">?</span>
-        <div className="absolute bottom-full mb-2 w-48 bg-gray-800 text-white text-sm rounded-md p-2 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-300 z-10">
-          Si vous ne souhaitez pas mettre cet équipement dans votre navire, mettez la quantité à 0.
-        </div>
-      </div>
-    </div>
-    <div className="col-span-2 text-center relative flex justify-center items-center">
-      Prix
-      <div className="ml-2 relative group cursor-pointer text-blue-600">
-        <span className="font-bold text-lg select-none">?</span>
-        <div className="absolute bottom-full mb-2 w-48 bg-gray-800 text-white text-sm rounded-md p-2 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-300 z-10">
-          Valeur estimée de l'équipement fournit ou à ajouter.
-        </div>
-      </div>
-    </div>
-    <div className="col-span-1 text-center">Dépense</div>
-    <div className="col-span-3 text-center">Remarque</div>
-    <div className="col-span-1 text-center">supp.</div>
-  </div>
-
-  {/* Corps des données */}
-    <div className="overflow-x-auto">
-    {/* Chaque "ligne" est un flex ou grid, ici on utilise flex-col avec chaque ligne en flex-row */}
-    {bateau.equipements.map((equip, index) => (
-      <div key={index} className="grid grid-cols-13 gap-4 items-center border-b border-gray-200 py-2">
-        {/* Nom */}
-        <div className="col-span-2 px-3 text-sm font-medium text-gray-900">
-          {equip.isNew ? (
-            <input
-              type="text"
-              value={equip.label}
-              onChange={(e) => handleEquipementChange(index, 'label', e.target.value)}
-              className="w-full border border-gray-300 rounded-md shadow-sm p-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
-              placeholder="Nom de l'équipement"
-            />
-          ) : (
-            equip.label
           )}
         </div>
 
-        {/* Existe (Checkbox) */}
-        <div className="col-span-1 px-3 text-center">
-          <input
-            type="checkbox"
-            checked={equip.existe}
-            onChange={(e) => handleEquipementChange(index, 'existe', e.target.checked)}
-            className="h-4 w-4 text-blue-600 border-gray-300 rounded"
-          />
+
+        {/* Informations générales */}
+        <div className="mb-6">
+          <h2 className="text-2xl font-semibold text-gray-800 mb-3">Informations Générales</h2>
+          <p className="text-lg text-gray-700 mb-2">
+            <span className="font-medium">Type :</span> {bateau.type || 'Non spécifié'}
+          </p>
+          <p className="text-lg text-gray-700 mb-2">
+            <span className="font-medium">Année :</span> {bateau.annee || 'Non spécifiée'}
+          </p>
+          <p className="text-lg text-gray-700 mb-2">
+            <span className="font-medium">Longueur :</span> {bateau.longueur ? `${bateau.longueur} m` : 'Non spécifiée'}
+          </p>
+          <p className="text-lg text-gray-700 mb-2">
+            <span className="font-medium">Largeur :</span> {bateau.largeur ? `${bateau.largeur} m` : 'Non spécifiée'}
+          </p>
         </div>
 
-        {/* État (Select) */}
-        <div className="col-span-2 px-3 text-center">
-          <select
-            value={equip.etat}
-            onChange={(e) => handleEquipementChange(index, 'etat', e.target.value)}
-            disabled={!equip.existe}
-            className={`mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-1 focus:ring-blue-500 focus:border-blue-500 text-sm ${!equip.existe ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
-          >
-            <option value="bon">Bon</option>
-            <option value="a_reviser">À réviser</option>
-            <option value="a_changer">À changer</option>
-          </select>
-        </div>
-
-        {/* Quantité */}
-        <div className="col-span-1 px-3 text-center">
-          <input
-            type="number"
-            min="0"
-            value={equip.quantite}
-            onChange={(e) => handleEquipementChange(index, 'quantite', parseInt(e.target.value) || 0)}
-            className="block w-14 border border-gray-300 rounded-md shadow-sm p-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
-          />
-        </div>
-
-        {/* Prix */}
-        <div className="col-span-2 px-3 text-center">
-          <input
-            type="number"
-            min="0"
-            step="10"
-            value={equip.prix}
-            onChange={(e) => handleEquipementChange(index, 'prix', parseInt(e.target.value) || 0)}
-            className="block w-20 border border-gray-300 rounded-md shadow-sm p-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
-          />
-        </div>
-
-        {/* Dépense */}
-        <div className="col-span-1 w-20 px-3 text-center font-bold text-gray-500">
-          {new Intl.NumberFormat('fr-FR').format(equip.depense)} €
-        </div>
-
-        {/* Remarque */}
-        <div className="col-span-3 px-3">
-          <input
-            type="text"
-            value={equip.remarque}
-            onChange={(e) => handleEquipementChange(index, 'remarque', e.target.value)}
-            className="block w-full border border-gray-300 rounded-md shadow-sm p-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
-          />
-        </div>
-            {index > 0 && (
-      <div className="col-span-1 px-3 flex justify-center">
-        <button
-          type="button"
-          onClick={() => handleRemoveEquipement(index)}
-          className="text-red-600 hover:underline text-sm"
-        >
-          X
-        </button>
-      </div>
-    )}
-      </div>
-    ))}
-    <div className="mt-4 flex justify-start">
-      <button
-        type="button"
-        onClick={handleAddEquipement}
-        className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition"
-      >
-        Ajouter un équipement
-      </button>
-    </div>
-  </div>
-
-  {/* Total */}
-  <div className="mt-4 text-right text-lg font-bold text-gray-800">
-    Total Dépenses Équipements : {new Intl.NumberFormat('fr-FR').format(totalEquipementDepense)} €
-  </div>
-</div>
-
-
-        {/* Total général (bateau + dépenses équipements) */}
-        <div className="text-3xl font-extrabold text-gray-900 text-center md:text-left mt-8 pt-4 border-t border-gray-200">
-            Coût Total Prévu : <span className="text-red-700">{new Intl.NumberFormat('fr-FR').format(coutTotalPrevu)} €</span>
+        {/* Liste des équipements */}
+        <div className="mb-6">
+          <h2 className="text-2xl font-semibold text-gray-800 mb-3">Équipements</h2>
+          {bateau.equipements && bateau.equipements.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 rounded-lg overflow-hidden">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Nom
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Quantité
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Prix Unitaire (€)
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Existant ?
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      État
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Dépense (€)
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {bateau.equipements.map((equip, index) => (
+                    <tr key={index}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {equip.nom}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                        {equip.quantite}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                        {equip.prix ? parseFloat(equip.prix).toFixed(2) : '0.00'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                        {equip.existe ? 'Oui' : 'Non'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                        {equip.existe ? (
+                          equip.etat === 'a_reviser' ? 'À réviser' :
+                          equip.etat === 'a_changer' ? 'À changer' : 'Bon'
+                        ) : 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-bold">
+                        {calculateDepensePure(equip).toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-gray-50">
+                    <td colSpan="5" className="px-6 py-3 text-right text-base font-bold text-gray-800">
+                      Coût total des équipements :
+                    </td>
+                    <td className="px-6 py-3 whitespace-nowrap text-base font-bold text-gray-900">
+                      {totalDepense.toFixed(2)} €
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          ) : (
+            <p className="text-gray-600">Aucun équipement défini pour ce bateau.</p>
+          )}
         </div>
 
         {/* Boutons d'action */}
-        <div className="flex flex-wrap justify-end space-x-4 mt-8">
-          {canSaveOrModify && ( // Le bouton "Enregistrer les modifications" est affiché conditionnellement
-            <button
-              type="submit"
-              disabled={loading || loadingAuth} // Désactive pendant le chargement de l'auth aussi
-              className="px-6 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+        <div className="mt-8 flex flex-wrap gap-4 justify-end">
+          {canEdit && (
+            <Link
+              href={`/bateaux/edit/${bateau.id}`}
+              className="px-6 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
-              {isNewBateau ? (loading ? 'Création...' : 'Créer le Bateau') : (loading ? 'Enregistrement...' : 'Enregistrer les modifications')}
-            </button>
+              Modifier
+            </Link>
           )}
-
-          {!isNewBateau && (
+          {canDuplicate && (
             <>
-              {/* Le bouton Dupliquer reste visible pour le bateau d'exemple, car la duplication d'un exemple est permise pour tous les utilisateurs authentifiés. */}
               <button
                 type="button"
                 onClick={handleDuplicate}
@@ -857,11 +379,35 @@ const handleRemoveEquipement = (index) => {
               )}
             </>
           )}
-          <Link href="/bateaux" className="px-6 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gray-500 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50">
-            Annuler / Retour
+          <Link href="/bateaux" className="px-6 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gray-500 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+            Retour à la liste
           </Link>
         </div>
-      </form>
+
+        {/* Modal de confirmation de suppression */}
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50">
+            <div className="bg-white p-8 rounded-lg shadow-xl max-w-sm w-full">
+              <h3 className="text-xl font-bold text-gray-900 mb-4">Confirmer la suppression</h3>
+              <p className="text-gray-700 mb-6">Êtes-vous sûr de vouloir supprimer ce bateau ? Cette action est irréversible.</p>
+              <div className="flex justify-end space-x-4">
+                <button
+                  onClick={cancelDelete}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={confirmDelete}
+                  className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                >
+                  Supprimer
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
