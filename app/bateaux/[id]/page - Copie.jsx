@@ -3,6 +3,7 @@ import Link from "next/link";
 import FicheBateau from "../../../components/FicheBateau";
 import { cookies } from "next/headers"; // Pour accéder au cookie de session côté serveur
 import { redirect } from 'next/navigation'; // Pour rediriger en cas de non-authentification
+import { getBaseUrl } from '@/lib/getBaseUrl';
 
 async function getBateau(id) {
   const cookieStore = await cookies();
@@ -19,7 +20,7 @@ async function getBateau(id) {
   }
 
   // La requête vers l'API interne de Next.js
-  const res = await fetch(`http://localhost:3000/api/bateaux/${id}`, {
+  const res = await fetch(`${getBaseUrl()}/api/bateaux/${id}`, {
     cache: "no-store", // S'assure que la requête n'est pas mise en cache
     headers: headers,
   });

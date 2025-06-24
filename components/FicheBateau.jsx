@@ -414,35 +414,39 @@ const handleRemoveImage = async (urlToRemove) => {
   };
 
   // Dupliquer le bateau
-  const handleDuplicate = () => {
-    if (!window.confirm('Êtes-vous sûr de vouloir dupliquer ce bateau ?')) return;
-    performAuthenticatedAction(async (idToken) => {
-      const dataToDuplicate = {
-        ...bateau,
-        nom_bateau: `${bateau.nom_bateau} (Copie pour ${user.email})`,
-        id: undefined, // L'ID sera généré par le serveur
-        userId: user.uid, // L'utilisateur actuel est le propriétaire de la copie
-      };
+const handleDuplicate = () => {
+  if (!window.confirm('Êtes-vous sûr de vouloir dupliquer ce bateau ?')) return;
 
-      const res = await fetch('/api/bateaux', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`,
-        },
-        body: JSON.stringify(dataToDuplicate),
-      });
+  performAuthenticatedAction(async (idToken) => {
+    // Crée une copie du bateau en supprimant les images personnalisées
+    const dataToDuplicate = {
+      ...bateau,
+      nom_bateau: `${bateau.nom_bateau} (Copie pour ${user.email})`,
+      id: undefined, // L'ID sera généré par le serveur
+      userId: user.uid, // L'utilisateur actuel est le propriétaire de la copie
+      images: [], // Remplace la liste des images par une liste vide
+    };
 
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ message: 'Erreur inconnue de l\'API' }));
-        throw new Error(errorData.message || `Erreur lors de la duplication: ${res.status}`);
-      }
-
-      const newBateau = await res.json();
-      setStatusMessage({ type: 'success', text: 'Bateau dupliqué avec succès ! Redirection...' });
-      setTimeout(() => router.push(`/bateaux/${newBateau.id}`), 2000); // Mise à jour du chemin de redirection
+    const res = await fetch('/api/bateaux', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${idToken}`,
+      },
+      body: JSON.stringify(dataToDuplicate),
     });
-  };
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({ message: 'Erreur inconnue de l\'API' }));
+      throw new Error(errorData.message || `Erreur lors de la duplication: ${res.status}`);
+    }
+
+    const newBateau = await res.json();
+    setStatusMessage({ type: 'success', text: 'Bateau dupliqué avec succès ! Redirection...' });
+    setTimeout(() => router.push(`/bateaux/${newBateau.id}`), 2000);
+  });
+};
+
 
   // Supprimer le bateau
   const handleDelete = () => {
@@ -461,7 +465,7 @@ const handleRemoveImage = async (urlToRemove) => {
       }
 
       setStatusMessage({ type: 'success', text: 'Bateau supprimé avec succès ! Redirection...' });
-      setTimeout(() => router.push('/'), 2000);
+      setTimeout(() => router.push('/bateaux'), 2000);
     });
   };
 
