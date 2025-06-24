@@ -3,16 +3,7 @@ import Link from "next/link";
 import FicheBateau from "../../../components/FicheBateau";
 import { cookies } from "next/headers"; // Pour accéder au cookie de session côté serveur
 import { redirect } from 'next/navigation'; // Pour rediriger en cas de non-authentification
-
-// Fonction utilitaire pour obtenir l'URL de base de l'API en production
-function getApiBaseUrl() {
-  // En production sur Vercel, process.env.VERCEL_URL contient l'URL du déploiement.
-  // En développement local, on utilise http://localhost:3000.
-  // Assurez-vous que VERCEL_URL est configuré comme variable d'environnement sur Vercel.
-  return process.env.NODE_ENV === 'production'
-    ? `https://${process.env.VERCEL_URL}` // Pour Vercel, utilisez l'URL complète
-    : 'http://localhost:3000'; // Pour le développement local
-}
+import { getBaseUrl } from '@/lib/getBaseUrl';
 
 async function getBateau(id) {
   const cookieStore = await cookies();
@@ -28,16 +19,11 @@ async function getBateau(id) {
     headers['Authorization'] = `Bearer ${firebaseIdToken}`;
   }
 
-  // Utilisation de l'URL de base dynamique pour l'API interne de Next.js
-  const baseUrl = getApiBaseUrl();
-  const apiUrl = `${baseUrl}/api/bateaux/${id}`; // Construction de l'URL complète de l'API
-
   // La requête vers l'API interne de Next.js
-  try {
-    const res = await fetch(apiUrl, { // Utilisation de l'apiUrl corrigée
-      cache: "no-store", // S'assure que la requête n'est pas mise en cache
-      headers: headers,
-    });
+  const res = await fetch(`${getBaseUrl()}/api/bateaux/${id}`, {
+    cache: "no-store", // S'assure que la requête n'est pas mise en cache
+    headers: headers,
+  });
 
   if (!res.ok) {
     console.error(`[Server Component] Erreur HTTP lors du chargement du bateau ${id}: ${res.status}`);
@@ -50,10 +36,6 @@ async function getBateau(id) {
     return null; // Retourne null si la requête échoue ou l'accès est refusé
   }
   return res.json();
-    } catch (error) {
-    console.error(`[Server Component] Erreur de réseau ou inattendue lors du chargement du bateau ${id}:`, error);
-    return null; // Retourne null en cas d'erreur réseau
-  }
 }
 
 export async function generateMetadata({ params }) {
