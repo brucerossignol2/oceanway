@@ -836,7 +836,7 @@ const handleRemoveImage = async (urlToRemove) => {
         </div>
 
         {/* Boutons d'action */}
-        <div className="flex flex-wrap justify-end space-x-4 mt-8">
+        <div className="flex flex-wrap justify-end space-x-4 mt-8 gap-4">
           {canSaveOrModify && ( // Le bouton "Enregistrer les modifications" est affiché conditionnellement
             <button
               type="submit"
