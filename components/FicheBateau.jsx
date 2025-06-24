@@ -243,11 +243,11 @@ const handleImageUpload = async (event) => {
   }
 
   try {
-    const res = await fetch(`${getBaseUrl()}/api/upload`, {
+    const res = await fetch('/api/upload', {
       method: 'POST',
       body: formData,
     });
-    
+
     if (!res.ok) {
       const errorData = await res.json();
       throw new Error(errorData.message || 'Erreur upload');
@@ -424,7 +424,7 @@ const handleRemoveImage = async (urlToRemove) => {
         userId: user.uid, // L'utilisateur actuel est le propriétaire de la copie
       };
 
-      const res = await fetch(`${getBaseUrl()}/api/bateaux`, {
+      const res = await fetch('/api/bateaux', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
