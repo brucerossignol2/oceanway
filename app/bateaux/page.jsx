@@ -7,7 +7,6 @@ import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import { getAuth, onAuthStateChanged } from "firebase/auth"; // 🔄 Utilisation de onAuthStateChanged
-import { getBaseUrl } from '@/lib/getBaseUrl';
 
 export default function BateauxPage() {
   const [bateaux, setBateaux] = useState([]);
@@ -26,12 +25,10 @@ export default function BateauxPage() {
           token = await user.getIdToken(); // ✅ Récupération du token après que l'user est bien défini
         }
 
-        const res = await fetch(`${getBaseUrl()}/api/bateaux/`, {
-          method: 'GET',
+        const res = await fetch("/api/bateaux", {
           headers: {
-            'Authorization': `Bearer ${token}`,
+            Authorization: `Bearer ${token}`,
           },
-          cache: 'no-store',
         });
 
         if (!res.ok) {
