@@ -106,11 +106,6 @@ export default function FicheBateau({ initialBateau, isNewBateau: propIsNewBatea
 
       // Initialise l'index de l'image à 0 quand le bateau change pour le carrousel
       setCurrentImageIndex(0);
-      //if (initialBateau.images && initialBateau.images.length > 0) {
-       // setSelectedMainImage(initialBateau.images[0]);
-      //} else {
-      //  setSelectedMainImage('/images/default.jpg');
-      //}
       
       // Calculer le total des dépenses avec les valeurs mises à jour
       const currentTotalDepense = equipementsWithCalculatedDepense.reduce((sum, equip) => sum + (equip.depense || 0), 0);
@@ -199,7 +194,6 @@ const handleRemoveEquipement = (index) => {
     };
   });
 };
-
 
   // Gestionnaire de changement pour les champs de base (nom, prix, description)
   const handleGeneralChange = (e) => {
@@ -638,14 +632,17 @@ const handleDuplicate = () => {
                       onError={(e) => { e.target.onerror = null; e.target.src = '/images/default.jpg'; }}
                       unoptimized
                     />
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveImage(imgUrl)}
-                      className="absolute top-0 right-0 -mt-2 -mr-2 bg-red-500 text-white rounded-full h-5 w-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-                      title="Supprimer cette image"
-                    >
-                      &times;
-                    </button>
+                    {/* Bouton de suppression si non protégé */}
+                    {(bateau.id !== '1' || (user && user.role === 'admin')) && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveImage(imgUrl)}
+                        className="absolute top-0 right-0 -mt-2 -mr-2 bg-red-500 text-white rounded-full h-5 w-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Supprimer cette image"
+                      >
+                        &times;
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
