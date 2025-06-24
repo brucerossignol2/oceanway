@@ -1,29 +1,20 @@
-// app/api/upload/route.js
+// /app/api/upload/route.js
 
 import { Storage } from '@google-cloud/storage';
 import { NextResponse } from 'next/server';
 import { Readable } from 'stream';
 
-// Chargement des identifiants Firebase depuis les variables d'environnement
-let credentials = null;
-try {
-  credentials = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON
-    ? JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON)
-    : null;
-
-  if (credentials && credentials.private_key && typeof credentials.private_key === 'string') {
-    credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
-  }
-} catch (e) {
-  console.error('Erreur de parsing des identifiants Firebase :', e);
-}
+// Chargement des identifiants depuis l'environnement
+const credentials = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON
+  ? JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON)
+  : null;
 
 const storage = credentials
   ? new Storage({
       projectId: credentials.project_id,
       credentials: {
         client_email: credentials.client_email,
-        private_key: credentials.private_key,
+        private_key: credentials.private_key.replace(/\\n/g, '\n'),
       },
     })
   : null;
@@ -59,8 +50,8 @@ export async function POST(request) {
       stream.push(null);
 
       const options = {
-        contentType: file.type,
-        // PAS de predefinedAcl si Uniform access est actif
+        contentType: file.type
+        // ❌ Ne pas inclure predefinedAcl si Uniform access est activé
       };
 
       await new Promise((resolve, reject) => {
@@ -69,6 +60,7 @@ export async function POST(request) {
           .on('finish', resolve);
       });
 
+      // URL publique si les objets sont accessibles (sinon créer une URL signée)
       const publicUrl = `https://storage.googleapis.com/${bucketName}/${fileName}`;
       urls.push(publicUrl);
     }
@@ -79,40 +71,6 @@ export async function POST(request) {
     console.error('Erreur upload Firebase Storage :', error);
     return NextResponse.json(
       { message: 'Erreur upload', error: error.message },
-      { status: 500 }
-    );
-  }
-}
-
-export async function DELETE(request) {
-  if (!storage || !bucketName) {
-    console.error("GCS configuration missing.");
-    return NextResponse.json(
-      { message: 'Erreur de configuration GCS.' },
-      { status: 500 }
-    );
-  }
-
-  try {
-    const { imageUrl } = await request.json();
-    if (!imageUrl) {
-      return NextResponse.json({ message: 'imageUrl manquant' }, { status: 400 });
-    }
-
-    const fileName = decodeURIComponent(imageUrl.split(`/${bucketName}/`)[1]);
-    if (!fileName) {
-      return NextResponse.json({ message: 'Nom de fichier invalide.' }, { status: 400 });
-    }
-
-    const file = storage.bucket(bucketName).file(fileName);
-    await file.delete();
-
-    return NextResponse.json({ message: 'Image supprimée avec succès.' }, { status: 200 });
-
-  } catch (error) {
-    console.error('Erreur suppression image GCS :', error);
-    return NextResponse.json(
-      { message: 'Erreur suppression image', error: error.message },
       { status: 500 }
     );
   }

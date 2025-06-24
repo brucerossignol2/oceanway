@@ -2,21 +2,23 @@
 "use client";
 
 import Link from 'next/link';
-import { useAuth } from './AuthContext'; // Importe notre hook d'authentification
+import { useAuth } from './AuthContext';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { useState } from 'react';
 
 export default function Navbar() {
   const { user, loadingAuth, signOut } = useAuth();
   const router = useRouter();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const handleSignOut = async () => {
     try {
       await signOut();
-      router.push('/login'); // Redirige vers la page de connexion après déconnexion
+      router.push('/login');
     } catch (error) {
       console.error("Erreur lors de la déconnexion:", error);
-      alert("Erreur lors de la déconnexion. Veuillez réessayer."); // Utiliser une alerte temporaire pour l'instant
+      alert("Erreur lors de la déconnexion. Veuillez réessayer.");
     }
   };
 
@@ -25,7 +27,7 @@ export default function Navbar() {
       <div className="container mx-auto flex justify-between items-center">
         <Link href="/" className="flex items-center space-x-3">
           <Image
-            src="/logo-oceanway.png" // Le chemin depuis `/public`
+            src="/logo-oceanway.png"
             alt="Logo OceanWay"
             width={40}
             height={40}
@@ -35,16 +37,44 @@ export default function Navbar() {
             OceanWay
           </span>
         </Link>
-        <div className="space-x-4">
-          {!loadingAuth && ( // N'affiche les liens qu'une fois l'état d'authentification chargé
+
+        <button
+          onClick={() => setMenuOpen(!menuOpen)}
+          className="md:hidden text-gray-700 focus:outline-none"
+        >
+          <svg
+            className="w-6 h-6"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d={menuOpen ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16"}
+            />
+          </svg>
+        </button>
+
+        <div
+          className={`$ {
+            menuOpen ? 'block' : 'hidden'
+          } md:flex md:items-center md:space-x-4 absolute md:static top-full left-0 w-full md:w-auto bg-white shadow-md md:shadow-none z-40 md:z-auto px-4 py-2 md:p-0`}
+        >
+          {!loadingAuth && (
             <>
               {user ? (
-                <>
-                  <Link href="/profile" className="text-gray-700 hover:text-blue-600 transition-colors">
+                <div className="flex flex-col md:flex-row md:items-center space-y-2 md:space-y-0 md:space-x-4">
+                  <Link
+                    href="/profile"
+                    className="text-gray-700 hover:text-blue-600 transition-colors"
+                  >
                     Profil ({user.email})
                   </Link>
                   {user.role === 'admin' && (
-                     <span className="text-sm font-semibold text-purple-600"> (Admin)</span>
+                    <span className="text-sm font-semibold text-purple-600">(Admin)</span>
                   )}
                   <button
                     onClick={handleSignOut}
@@ -52,16 +82,22 @@ export default function Navbar() {
                   >
                     Se déconnecter
                   </button>
-                </>
+                </div>
               ) : (
-                <>
-                  <Link href="/login" className="py-1 px-3 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors">
+                <div className="flex flex-col md:flex-row md:items-center space-y-2 md:space-y-0 md:space-x-4">
+                  <Link
+                    href="/login"
+                    className="py-1 px-3 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
+                  >
                     Se connecter
                   </Link>
-                  <Link href="/signup" className="py-1 px-3 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors">
+                  <Link
+                    href="/signup"
+                    className="py-1 px-3 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors"
+                  >
                     S'inscrire
                   </Link>
-                </>
+                </div>
               )}
             </>
           )}

@@ -11,7 +11,7 @@ export default function AnimatedVideoText() {
 
   return (
     <div className="w-full overflow-hidden ">
-      <svg viewBox="0 00 700 300" className="w-full w-full h-auto">
+      <svg viewBox="0 00 800 300" className="w-full w-full h-auto">
         <defs>
           <mask id="text-mask" maskUnits="userSpaceOnUse">
             <rect width="100%" height="100%" fill="black" />

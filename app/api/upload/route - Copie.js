@@ -5,18 +5,9 @@ import { NextResponse } from 'next/server';
 import { Readable } from 'stream';
 
 // Chargement des identifiants Firebase depuis les variables d'environnement
-let credentials = null;
-try {
-  credentials = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON
-    ? JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON)
-    : null;
-
-  if (credentials && credentials.private_key && typeof credentials.private_key === 'string') {
-    credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
-  }
-} catch (e) {
-  console.error('Erreur de parsing des identifiants Firebase :', e);
-}
+const credentials = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON
+  ? JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON)
+  : null;
 
 const storage = credentials
   ? new Storage({
@@ -60,7 +51,7 @@ export async function POST(request) {
 
       const options = {
         contentType: file.type,
-        // PAS de predefinedAcl si Uniform access est actif
+        // Supprime le champ "predefinedAcl" car le bucket utilise uniform access
       };
 
       await new Promise((resolve, reject) => {
@@ -99,6 +90,7 @@ export async function DELETE(request) {
       return NextResponse.json({ message: 'imageUrl manquant' }, { status: 400 });
     }
 
+    // Extrait le nom du fichier à partir de l'URL publique
     const fileName = decodeURIComponent(imageUrl.split(`/${bucketName}/`)[1]);
     if (!fileName) {
       return NextResponse.json({ message: 'Nom de fichier invalide.' }, { status: 400 });

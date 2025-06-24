@@ -229,71 +229,87 @@ const handleRemoveEquipement = (index) => {
   };
 
   // Gestionnaire de téléchargement d'images
-  const handleImageUpload = async (event) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
+const handleImageUpload = async (event) => {
+  const files = event.target.files;
+  if (!files || files.length === 0) return;
 
-    setLoading(true);
-    setError(null);
-    setStatusMessage(null);
+  setLoading(true);
+  setError(null);
+  setStatusMessage(null);
 
-    const formData = new FormData();
-    for (const file of files) {
-      formData.append('files', file);
+  const formData = new FormData();
+  for (const file of files) {
+    formData.append('files', file);
+  }
+
+  try {
+    const res = await fetch('/api/upload', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json();
+      throw new Error(errorData.message || 'Erreur upload');
     }
 
-    try {
-      const res = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || `Erreur lors du téléchargement: ${res.status}`);
+    const { urls } = await res.json();
+    setBateau(prev => {
+      const updatedImages = [...(prev.images || []), ...urls];
+      if (prev.images?.length === 0 && updatedImages.length > 0) {
+        setCurrentImageIndex(0);
       }
+      return { ...prev, images: updatedImages };
+    });
+    setStatusMessage({ type: 'success', text: 'Images téléchargées avec succès !' });
 
-        const { urls } = await res.json();
-        setBateau(prev => {
-        const updatedImages = [...(prev.images || []), ...urls];
-        // Si c'était vide avant, on met l'index à 0 pour afficher la première nouvelle image du carrousel
-            //if (updatedImages.length > 0 && !selectedMainImage) {
-            //setSelectedMainImage(updatedImages[0]);
-        if (prev.images?.length === 0 && updatedImages.length > 0) {
-          setCurrentImageIndex(0);
-        }
-        return { ...prev, images: updatedImages };
-       });
-      setStatusMessage({ type: 'success', text: 'Images téléchargées avec succès !' });
-
-    } catch (e) {
-      console.error("Erreur lors du téléchargement des images :", e);
-      setStatusMessage({ type: 'error', text: `Erreur de téléchargement: ${e.message}` });
-    } finally {
-      setLoading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+  } catch (e) {
+    console.error("Erreur upload Firebase Storage:", e);
+    setStatusMessage({ type: 'error', text: `Erreur de téléchargement: ${e.message}` });
+  } finally {
+    setLoading(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
-  };
+  }
+};
 
 
 
     // Fonction pour supprimer une image de la galerie
-  const handleRemoveImage = (urlToRemove) => {
-    setBateau(prev => {
-      if (!prev) return null;
-      const updatedImages = prev.images.filter(url => url !== urlToRemove);
+const handleRemoveImage = async (urlToRemove) => {
+  try {
+    const res = await fetch('/api/upload', {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ imageUrl: urlToRemove }),
+    });
 
-      // Ajuste l'index si l'image courante est supprimée pour le carrousel
+    if (!res.ok) {
+      const errData = await res.json();
+      throw new Error(errData.error || 'Erreur lors de la suppression');
+    }
+
+    setBateau((prev) => {
+      if (!prev) return null;
+      const updatedImages = prev.images.filter((url) => url !== urlToRemove);
+
+      // Ajuste l'image courante
       if (currentImageIndex >= updatedImages.length && updatedImages.length > 0) {
         setCurrentImageIndex(updatedImages.length - 1);
       } else if (updatedImages.length === 0) {
-        setCurrentImageIndex(0); // Ou une valeur qui indique "pas d'image"
+        setCurrentImageIndex(0);
       }
+
       return { ...prev, images: updatedImages };
     });
-  };
+  } catch (err) {
+    console.error('Erreur suppression image :', err);
+    setStatusMessage({ type: 'error', text: `Erreur suppression : ${err.message}` });
+  }
+};
 
     // Fonctions pour naviguer dans le carrousel
   const handlePrevImage = useCallback(() => {
@@ -508,7 +524,7 @@ const handleRemoveEquipement = (index) => {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <div className="flex flex-col space-y-4">
+          <div className="flex flex-col space-y-4 mb-6">
             <div>
               <label htmlFor="nom_bateau" className="block text-sm font-medium text-gray-700">
                 Nom du Bateau {' '}
@@ -556,7 +572,7 @@ const handleRemoveEquipement = (index) => {
           <div className="flex flex-col space-y-4">
             {/* Conteneur du carrousel de l'image principale */}
             <div className="flex-shrink-0 mb-4 text-center relative h-96 group"> 
-              <label htmlFor="imageUrlInput" className="block text-sm font-medium text-gray-700 mb-2">Image Principale Actuelle</label>
+              
               {displayedImageUrl ? (
                 <>
                   <Image
@@ -564,7 +580,7 @@ const handleRemoveEquipement = (index) => {
                     src={displayedImageUrl}
                     alt="Image principale du bateau"
                     fill // Utilisez 'fill' pour que l'image remplisse le conteneur parent
-                    className="rounded-lg shadow-md border border-gray-300 object-contain transition-opacity duration-500 ease-in-out" // Transition de fondu
+                    className="rounded-lg border-gray-300 object-contain transition-opacity duration-500 ease-in-out" // Transition de fondu
                     onError={(e) => { e.target.onerror = null; e.target.src = '/images/default.jpg'; }}
                     unoptimized
                   />
@@ -650,9 +666,6 @@ const handleRemoveEquipement = (index) => {
               </label>
               {loading && <p className="text-sm text-gray-600 mt-2">Téléchargement en cours...</p>}
               {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
-               <p className="text-xs text-gray-500 mt-2">
-                  Note : Les images seront stockées localement sur le serveur de développement. Pour la production, une solution de stockage cloud est recommandée.
-              </p>
             </div>
           </div>        </div>
 
@@ -662,7 +675,7 @@ const handleRemoveEquipement = (index) => {
   <h2 className="text-2xl font-bold mb-4 text-gray-800">Équipements du Navire</h2>
 
   {/* En-tête */}
-  <div className="grid grid-cols-13 gap-4 font-semibold mb-2">
+  <div className="grid gap-4 font-semibold mb-2 grid grid-cols-5 gap-4 sm:grid-cols-10 lg:grid-cols-13">
     <div className="col-span-2 text-center">Nom</div>
     <div className="col-span-1 text-center relative flex justify-center items-center">
       Existe
@@ -709,7 +722,7 @@ const handleRemoveEquipement = (index) => {
     <div className="overflow-x-auto">
     {/* Chaque "ligne" est un flex ou grid, ici on utilise flex-col avec chaque ligne en flex-row */}
     {bateau.equipements.map((equip, index) => (
-      <div key={index} className="grid grid-cols-13 gap-4 items-center border-b border-gray-200 py-2">
+      <div key={index} className="grid gap-4 items-center border-b border-gray-200 py-2 grid grid-cols-5 gap-4 sm:grid-cols-10 lg:grid-cols-13">
         {/* Nom */}
         <div className="col-span-2 px-3 text-sm font-medium text-gray-900">
           {equip.isNew ? (
