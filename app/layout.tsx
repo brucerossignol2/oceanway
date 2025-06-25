@@ -31,8 +31,8 @@ export default function RootLayout({
       >
         <AuthContextProvider>
           <Navbar />
-          <main className="min-h-screen bg-gray-100 py-6">
-            {children}
+          <main className="min-h-screen bg-gray-100 py-6 mt-20 md:mt-0">
+             {children}
           </main>
           {/* Nouveau pied de page ajouté ici */}
           <footer className="bg-gray-800 text-white p-4 text-center text-sm">
