@@ -409,7 +409,7 @@ const handleRemoveImage = async (urlToRemove) => {
 
   // Dupliquer le bateau
 const handleDuplicate = () => {
-  if (!window.confirm('Êtes-vous sûr de vouloir dupliquer ce bateau ?')) return;
+  if (!window.confirm('Êtes-vous sûr de vouloir dupliquer ce bateau ? (Uniquement possible en étant connecté)')) return;
 
   performAuthenticatedAction(async (idToken) => {
     // Crée une copie du bateau en supprimant les images personnalisées
