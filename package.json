@@ -15,7 +15,7 @@
     "dotenv": "^16.5.0",
     "firebase": "^11.9.1",
     "firebase-admin": "^11.10.1",
-    "next": "^15.4.0-canary.96",
+    "next": "15.4.0",
     "nookies": "^2.5.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
